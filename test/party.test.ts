@@ -31,6 +31,11 @@ describe("createParty", () => {
     expect(() => createParty("p", { queue: "SOLO", scheduledAt: NOW - 1 }, NOW)).toThrowError(err("INVALID_TIME"));
     expect(createParty("p", { queue: "SOLO", scheduledAt: FUTURE }, NOW).settings.scheduledAt).toBe(FUTURE);
   });
+
+  it("rejects an absurdly far future time (e.g. a 6-digit year)", () => {
+    const farFuture = NOW + 400 * 24 * 3600 * 1000;
+    expect(() => createParty("p", { queue: "SOLO", scheduledAt: farFuture }, NOW)).toThrowError(err("INVALID_TIME"));
+  });
 });
 
 describe("joinParty — position queue", () => {

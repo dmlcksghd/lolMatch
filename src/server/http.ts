@@ -33,8 +33,9 @@ export function createAppServer(options: GatewayOptions = {}): AppServer {
   app.use(express.static(publicDir));
 
   const httpServer = createServer(app);
-  // 프론트엔드를 같은 서버가 제공하므로 기본(동일 출처)만 허용.
-  // 교차 출처가 필요하면 CORS_ORIGIN 환경변수로 명시.
+  // 주의: 브라우저는 WebSocket 핸드셰이크에 CORS/SOP를 적용하지 않으므로 아래 cors 옵션은
+  // polling 전송에만 유효하다. 실제 교차 출처 WS 차단은 allowRequest 콜백이 필요하다(ROADMAP 참고).
+  // CORS_ORIGIN 환경변수는 교차 출처 XHR(polling)을 명시 허용할 때 사용.
   const corsOrigin = process.env.CORS_ORIGIN;
   const io = new IOServer(httpServer, {
     maxHttpBufferSize: 10_000,

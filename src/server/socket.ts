@@ -35,6 +35,8 @@ export function registerRosterGateway(
     let joinedRoom: string | null = null;
 
     // 방 상태를 방 전체에 알리고, 자리가 모두 비면 방을 회수(메모리 누수 방지).
+    // TODO(settings): 회수 시 방 설정(title/time/tier/queue)도 함께 사라진다.
+    //   설정 편집 기능(ROADMAP #3) 도입 시 설정이 있으면 회수를 미루거나 설정만 보존할 것.
     const broadcastAndReap = (roomId: string, room: Room): void => {
       io.to(roomId).emit("state", registry.toDTO(room));
       if (filledCount(room.roster) === 0) registry.remove(roomId);

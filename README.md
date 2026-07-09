@@ -7,6 +7,8 @@
 카카오톡 오픈채팅방에는 공식 봇 API가 없어, "방 안의 봇" 대신 **공유 가능한 웹 링크**로 접근한다 —
 안전하고(계정 정지 위험 없음) 어떤 기기에서도 열린다.
 
+**🎮 라이브: https://lolmatch.onrender.com** (뒤에 `?room=방이름` 붙여 공유)
+
 ## 핵심 기능
 - 5개 포지션을 **클릭 한 번으로 저장/해제** — 연결이 끊겨도 유지(브라우저 `clientId` 소유권).
 - **설정 편집**: 예정 시간, 티어(아이언~챌린저·상관없음), 큐(일반게임·칼바람·솔로랭크·자유랭크·5인 자유랭·기타).
@@ -53,6 +55,8 @@ docs/         DESIGN·ARCHITECTURE·GIT_FLOW·TDD·ROADMAP·DEPLOY
 | [docs/TDD.md](docs/TDD.md) | RED→GREEN→리뷰→커밋→머지 |
 | [docs/DEPLOY.md](docs/DEPLOY.md) | Render 배포 + **킵얼라이브** |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | 완료 항목 + 남은 과제 |
+| [docs/STACK.md](docs/STACK.md) | 사용 언어·기술 스택 |
+| [CHANGELOG.md](CHANGELOG.md) | 버전별 변경 사항 |
 
 ## 배포
 실시간(WebSocket) 때문에 **Vercel은 부적합**, **Render**(무료) 등에 배포 — [docs/DEPLOY.md](docs/DEPLOY.md).

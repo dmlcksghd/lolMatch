@@ -40,7 +40,7 @@ interface RoomDTO {
     count: number;
     capacity: number;
     settings: { queue: string; tier: string; scheduledAt: number | null };
-    members: Array<{ clientId: string; nickname: string; position: string | null }>;
+    members: Array<{ clientId: string; nickname: string; positions: string[] }>;
   }>;
 }
 
@@ -63,11 +63,11 @@ describe("socket party gateway", () => {
     await join(a);
     await join(b);
     const bSees = once<RoomDTO>(b, "room:state");
-    a.emit("party:create", { clientId: "ca", nickname: "Alice", position: "MID", queue: "SOLO" });
+    a.emit("party:create", { clientId: "ca", nickname: "Alice", positions: ["MID"], queue: "SOLO" });
     const state = await bSees;
     expect(state.parties).toHaveLength(1);
     expect(state.parties[0]?.members[0]?.nickname).toBe("Alice");
-    expect(state.parties[0]?.members[0]?.position).toBe("MID");
+    expect(state.parties[0]?.members[0]?.positions).toEqual(["MID"]);
   });
 
   it("lets a second person join the same party at the same position", async () => {
@@ -76,30 +76,30 @@ describe("socket party gateway", () => {
     await join(a);
     await join(b);
     const created = once<RoomDTO>(a, "room:state");
-    a.emit("party:create", { clientId: "ca", nickname: "Alice", position: "MID", queue: "SOLO" });
+    a.emit("party:create", { clientId: "ca", nickname: "Alice", positions: ["MID"], queue: "SOLO" });
     const pid = (await created).parties[0]!.id;
     const joined = once<RoomDTO>(a, "room:state");
-    b.emit("party:join", { partyId: pid, clientId: "cb", nickname: "Bob", position: "MID" });
+    b.emit("party:join", { partyId: pid, clientId: "cb", nickname: "Bob", positions: ["MID"] });
     const s2 = await joined;
     expect(s2.parties[0]?.count).toBe(2);
-    expect(s2.parties[0]?.members.every((m) => m.position === "MID")).toBe(true);
+    expect(s2.parties[0]?.members.every((m) => m.positions.includes("MID"))).toBe(true);
   });
 
   it("stores no positions for an ARAM party", async () => {
     const a = connect();
     await join(a);
     const created = once<RoomDTO>(a, "room:state");
-    a.emit("party:create", { clientId: "ca", nickname: "Alice", position: "MID", queue: "ARAM" });
+    a.emit("party:create", { clientId: "ca", nickname: "Alice", positions: ["MID"], queue: "ARAM" });
     const s = await created;
     expect(s.parties[0]?.settings.queue).toBe("ARAM");
-    expect(s.parties[0]?.members[0]?.position).toBeNull();
+    expect(s.parties[0]?.members[0]?.positions).toEqual([]);
   });
 
   it("removes a party when the last member leaves", async () => {
     const a = connect();
     await join(a);
     const created = once<RoomDTO>(a, "room:state");
-    a.emit("party:create", { clientId: "ca", nickname: "Alice", position: "MID", queue: "SOLO" });
+    a.emit("party:create", { clientId: "ca", nickname: "Alice", positions: ["MID"], queue: "SOLO" });
     const pid = (await created).parties[0]!.id;
     const left = once<RoomDTO>(a, "room:state");
     a.emit("party:leave", { partyId: pid, clientId: "ca" });
@@ -110,7 +110,7 @@ describe("socket party gateway", () => {
     const a = connect();
     await join(a);
     const err = once<{ code: string }>(a, "party:error");
-    a.emit("party:create", { clientId: "ca", nickname: "", position: "MID", queue: "SOLO" });
+    a.emit("party:create", { clientId: "ca", nickname: "", positions: ["MID"], queue: "SOLO" });
     expect((await err).code).toBe("INVALID_NICKNAME");
   });
 
@@ -121,7 +121,7 @@ describe("socket party gateway", () => {
     a.emit("party:create", {
       clientId: "ca",
       nickname: "Alice",
-      position: "MID",
+      positions: ["MID"],
       queue: "SOLO",
       scheduledAt: NOW + HOUR,
     });

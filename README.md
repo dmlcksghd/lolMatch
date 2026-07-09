@@ -74,3 +74,9 @@ docs/            # 설계·계획 문서 (아래 참고)
 
 Node.js 20+ · TypeScript · Express · **Socket.IO** · Vitest
 프론트엔드는 번들러 없이 순수 HTML/CSS/JS + 서버가 제공하는 Socket.IO 클라이언트.
+
+## 배포
+
+친구들이 링크로 접속하려면 서버를 올려야 한다. 실시간(WebSocket) 때문에 **Vercel은 부적합**하고,
+**Render**(무료, 상시 가동) 등에 배포한다 — 클릭 단위 안내는 [docs/DEPLOY.md](docs/DEPLOY.md).
+저장소에 `render.yaml` 블루프린트가 포함되어 있어 Render에서 바로 인식된다.

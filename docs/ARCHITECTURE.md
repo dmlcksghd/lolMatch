@@ -1,0 +1,78 @@
+# 시스템 설계
+
+## 계층
+
+프레임워크 의존성을 안쪽으로 밀어내는 3계층. 도메인은 아무것도 import 하지 않는다.
+
+```
+public/ (브라우저)
+   │  Socket.IO 이벤트
+src/server/  ── socket.ts (게이트웨이) ── rooms.ts (저장 경계)
+   │                                         │
+   └───────────────── src/domain/ ◀──────────┘
+                      roster.ts · positions.ts · errors.ts  (순수)
+```
+
+- **domain** — 순수 함수 + 불변 상태. 자리 차지/해제/이동 규칙. 시간은 주입(`now`)받아 결정적.
+- **server/rooms** — 여러 방의 현재 상태를 담는 인메모리 저장 경계. roster 값은 불변, 연산마다 교체.
+- **server/socket** — Socket.IO 이벤트를 도메인 연산으로 변환하고 방 전체에 브로드캐스트.
+- **server/http** — Express 정적 서빙 + Socket.IO 부착. `listen` 없는 팩토리라 테스트가 실서버를 띄운다.
+- **public** — 번들러 없는 프론트엔드. 서버가 `/socket.io/socket.io.js`를 자동 제공.
+
+## 데이터 모델
+
+```ts
+Seat  = { position, nickname, ownerId, claimedAt }   // ownerId = 소켓 세션 id
+RosterState = { seats: Record<Position, Seat | null> }   // 불변
+Room  = { id, settings, roster }
+RoomSettings = { title, time, tier, queue }
+```
+
+**와이어 DTO** (`state` 이벤트 페이로드):
+
+```jsonc
+{
+  "roomId": "우리방",
+  "settings": { "title": "...", "time": "", "tier": "", "queue": "솔랭 / 자유랭" },
+  "seats": {
+    "TOP": null,
+    "MID": { "position": "MID", "nickname": "유자생강차", "ownerId": "<socket id>", "claimedAt": 1700000000000 }
+    // JGL, ADC, SUP ...
+  },
+  "filled": 1
+}
+```
+
+## 이벤트 프로토콜 (Socket.IO)
+
+| 방향 | 이벤트 | 페이로드 | 설명 |
+|------|--------|----------|------|
+| C→S | `join` | `{ roomId }` | 방 입장 → 현재 `state` 수신 |
+| C→S | `claim` | `{ position, nickname }` | 자리 차지 → 방 전체 `state` |
+| C→S | `release` | `{ position }` | 내 자리 비우기 → 방 전체 `state` |
+| S→C | `state` | `RoomDTO` | 방의 최신 상태(전체 스냅샷) |
+| S→C | `roster:error` | `{ code, message }` | 요청자에게만 오류 통지 |
+| (자동) | `disconnect` | — | 그 세션의 자리 해제 → 방 전체 `state` |
+
+오류 코드: `INVALID_POSITION` · `INVALID_NICKNAME` · `POSITION_TAKEN` ·
+`SEAT_NOT_FOUND` · `NOT_SEAT_OWNER` · `INVALID_ROOM` · `NOT_JOINED`.
+
+상태는 항상 **전체 스냅샷**을 보낸다(델타 아님). 5칸짜리 작은 상태라 단순함이 이득이다.
+
+## 기술 선택과 대안
+
+| 선택 | 이유 | 대안과 트레이드오프 |
+|------|------|---------------------|
+| **Socket.IO(자체 호스팅)** | 순수 도메인 → TDD 용이, 외부 계정/시크릿 불필요, 클라이언트 JS 자동 제공, 재연결·룸 내장 | **Supabase Realtime**: 관리형·서버리스지만 계정+API키(시크릿) 필요, 단위 테스트에 목 필요 · **Firebase RTDB**: 유사 · **순수 WebSocket(ws)**: 더 가볍지만 룸/재연결/폴백을 직접 구현 |
+| **인메모리 상태** | MVP엔 충분, 의존성 0, 테스트 결정적 | 서버 재시작 시 초기화 · 수평 확장 불가 → ROADMAP에서 Redis/SQLite 어댑터로 교체 (저장 경계를 `rooms.ts`로 이미 격리) |
+| **번들러 없는 프론트엔드** | 마이크로사이트 규모, 빌드 파이프라인 불필요 | 규모가 커지면 Vite 도입 |
+| **시간 주입(`now`)** | 도메인 순수성·결정적 테스트 | — |
+
+전송 계층을 `socket.ts` / `rooms.ts`로 분리했기 때문에, 나중에 Supabase로 바꾸더라도
+`domain/`은 그대로 재사용된다.
+
+## 확장 경로
+
+- **다중 인스턴스**: 인메모리 → Redis 어댑터 + Socket.IO Redis 어댑터(pub/sub)로 브로드캐스트 팬아웃.
+- **영속성**: `RoomRegistry`를 인터페이스로 추출 → SQLite/Redis 구현 주입.
+- **소유권 안정화**: `ownerId`를 소켓 id가 아니라 localStorage 기반 클라이언트 토큰으로 (ROADMAP #1).

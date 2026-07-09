@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>LOLMatch · 랭크 5인 모집</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎮</text></svg>"
+    />
+    <meta property="og:title" content="롤 랭크 5인 모집" />
+    <meta property="og:description" content="탑·정글·미드·원딜·서폿 자리를 실시간으로 잡아보세요." />
+    <meta property="og:type" content="website" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="stage">
+      <article class="card" aria-labelledby="title">
+        <header class="card__head">
+          <div class="eyebrow">Ranked · 5인 파티</div>
+          <h1 id="title">게임 하실 분<span class="spark">!</span></h1>
+          <dl class="meta">
+            <div><dt>시간</dt><dd data-meta="time">—</dd></div>
+            <div><dt>티어</dt><dd data-meta="tier">—</dd></div>
+            <div><dt>큐</dt><dd data-meta="queue">—</dd></div>
+          </dl>
+        </header>
+
+        <div class="me">
+          <label for="nick">내 닉네임</label>
+          <input id="nick" type="text" maxlength="16" autocomplete="off" placeholder="예: 유자생강차" />
+        </div>
+
+        <ul class="lanes" id="lanes" aria-label="포지션 목록"></ul>
+
+        <footer class="card__foot">
+          <div class="count" id="count" aria-live="polite">
+            <span><strong id="filled">0</strong> / 5</span>
+            <small>모집</small>
+          </div>
+          <span class="conn" id="conn" title="연결 상태">연결 중…</span>
+          <button class="btn" id="newroom" type="button">새 방</button>
+          <button class="btn btn--primary" id="copy" type="button">모집 링크 복사</button>
+        </footer>
+      </article>
+
+      <p class="note">
+        방 코드 <b id="roomcode">—</b> · 같은 링크에 들어온 사람끼리 실시간으로 자리가 공유됩니다.
+        <b>모집 링크 복사</b>로 카카오톡 오픈채팅방에 붙여넣으세요.
+      </p>
+    </main>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/app.js"></script>
+  </body>
+</html>

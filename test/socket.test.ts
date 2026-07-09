@@ -3,21 +3,24 @@ import type { AddressInfo } from "node:net";
 import { io as ioClient, type Socket as ClientSocket } from "socket.io-client";
 import { createAppServer, type AppServer } from "../src/server/http";
 
+const NOW = 1_700_000_000_000;
+const HOUR = 3_600_000;
+let clock = NOW;
 let app: AppServer;
 let url: string;
 const sockets: ClientSocket[] = [];
 
 beforeEach(async () => {
-  app = createAppServer({ now: () => 1_700_000_000_000 });
-  await new Promise<void>((resolve) => app.httpServer.listen(0, resolve));
-  const { port } = app.httpServer.address() as AddressInfo;
-  url = `http://localhost:${port}`;
+  clock = NOW;
+  app = createAppServer({ now: () => clock });
+  await new Promise<void>((r) => app.httpServer.listen(0, r));
+  url = `http://localhost:${(app.httpServer.address() as AddressInfo).port}`;
 });
 
 afterEach(async () => {
   for (const s of sockets.splice(0)) s.close();
   app.io.close();
-  await new Promise<void>((resolve) => app.httpServer.close(() => resolve()));
+  await new Promise<void>((r) => app.httpServer.close(() => r()));
 });
 
 function connect(): ClientSocket {
@@ -25,142 +28,140 @@ function connect(): ClientSocket {
   sockets.push(s);
   return s;
 }
-function once<T>(socket: ClientSocket, event: string): Promise<T> {
-  return new Promise((resolve) => socket.once(event, resolve as (v: unknown) => void));
+function once<T>(s: ClientSocket, ev: string): Promise<T> {
+  return new Promise((res) => s.once(ev, res as (v: unknown) => void));
 }
 
 interface StateDTO {
   roomId: string;
+  gameId: number;
   filled: number;
+  settings: { tier: string; queue: string; scheduledAt: number | null };
   seats: Record<string, { nickname: string; ownerId: string } | null>;
 }
 
-describe("realtime roster gateway", () => {
-  it("sends current state to a client on join", async () => {
+describe("gateway — join & claim", () => {
+  it("sends game state on join", async () => {
     const c = connect();
-    c.emit("join", { roomId: "room1" });
-    const state = await once<StateDTO>(c, "state");
-    expect(state.roomId).toBe("room1");
-    expect(state.filled).toBe(0);
+    c.emit("join", { roomId: "r1" });
+    const s = await once<StateDTO>(c, "state");
+    expect(s.gameId).toBe(1);
+    expect(s.filled).toBe(0);
+    expect(s.settings.queue).toBe("SOLO");
   });
 
-  it("broadcasts a claim to every client in the room", async () => {
+  it("broadcasts a claim to everyone in the room", async () => {
     const a = connect();
     const b = connect();
     a.emit("join", { roomId: "r" });
     await once(a, "state");
     b.emit("join", { roomId: "r" });
     await once(b, "state");
-
-    const bUpdate = once<StateDTO>(b, "state");
-    a.emit("claim", { position: "MID", nickname: "유자생강차" });
-    const state = await bUpdate;
-    expect(state.seats.MID?.nickname).toBe("유자생강차");
-    expect(state.filled).toBe(1);
+    const upd = once<StateDTO>(b, "state");
+    a.emit("claim", { position: "MID", nickname: "유자생강차", clientId: "cA" });
+    const s = await upd;
+    expect(s.seats.MID?.nickname).toBe("유자생강차");
+    expect(s.filled).toBe(1);
   });
 
-  it("does not leak a claim to a different room", async () => {
-    const a = connect();
-    const b = connect();
-    a.emit("join", { roomId: "roomA" });
-    await once(a, "state");
-    b.emit("join", { roomId: "roomB" });
-    await once(b, "state");
-
-    let leaked = false;
-    b.on("state", () => {
-      leaked = true;
-    });
-    a.emit("claim", { position: "TOP", nickname: "A" });
-    await once(a, "state");
-    await new Promise((r) => setTimeout(r, 80));
-    expect(leaked).toBe(false);
+  it("rejects a claim without a clientId", async () => {
+    const c = connect();
+    c.emit("join", { roomId: "r" });
+    await once(c, "state");
+    const err = once<{ code: string }>(c, "roster:error");
+    c.emit("claim", { position: "MID", nickname: "A" });
+    expect((await err).code).toBe("NO_CLIENT");
   });
 
   it("emits roster:error on an invalid position", async () => {
     const c = connect();
-    c.emit("join", { roomId: "e" });
+    c.emit("join", { roomId: "r" });
     await once(c, "state");
-    const errP = once<{ code: string }>(c, "roster:error");
-    c.emit("claim", { position: "ZZZ", nickname: "A" });
-    expect((await errP).code).toBe("INVALID_POSITION");
-  });
-
-  it("frees a player's seat when they disconnect", async () => {
-    const a = connect();
-    const b = connect();
-    a.emit("join", { roomId: "d" });
-    await once(a, "state");
-    b.emit("join", { roomId: "d" });
-    await once(b, "state");
-
-    a.emit("claim", { position: "ADC", nickname: "A" });
-    await once(b, "state");
-    const afterLeave = once<StateDTO>(b, "state");
-    a.close();
-    expect((await afterLeave).filled).toBe(0);
+    const err = once<{ code: string }>(c, "roster:error");
+    c.emit("claim", { position: "ZZZ", nickname: "A", clientId: "cA" });
+    expect((await err).code).toBe("INVALID_POSITION");
   });
 });
 
-describe("realtime roster gateway — release & guards", () => {
-  it("broadcasts a release to everyone in the room", async () => {
+describe("persistence — seats survive disconnect", () => {
+  it("keeps a claimed seat after the claimer disconnects", async () => {
     const a = connect();
+    a.emit("join", { roomId: "keep" });
+    await once(a, "state");
+    const claimed = once<StateDTO>(a, "state");
+    a.emit("claim", { position: "TOP", nickname: "방장", clientId: "cA" });
+    await claimed;
+    a.close();
+    await new Promise((r) => setTimeout(r, 50));
     const b = connect();
+    b.emit("join", { roomId: "keep" });
+    const s = await once<StateDTO>(b, "state");
+    expect(s.filled).toBe(1);
+    expect(s.seats.TOP?.nickname).toBe("방장");
+  });
+});
+
+describe("release ownership by clientId", () => {
+  it("lets the owner release, rejects others", async () => {
+    const a = connect();
     a.emit("join", { roomId: "rel" });
     await once(a, "state");
-    b.emit("join", { roomId: "rel" });
-    await once(b, "state");
+    const claimed = once<StateDTO>(a, "state");
+    a.emit("claim", { position: "ADC", nickname: "A", clientId: "cA" });
+    await claimed;
 
-    a.emit("claim", { position: "SUP", nickname: "A" });
-    await once(b, "state");
-    const relUpdate = once<StateDTO>(b, "state");
-    a.emit("release", { position: "SUP" });
-    expect((await relUpdate).filled).toBe(0);
-  });
+    const err = once<{ code: string }>(a, "roster:error");
+    a.emit("release", { position: "ADC", clientId: "cX" });
+    expect((await err).code).toBe("NOT_SEAT_OWNER");
 
-  it("rejects a claim before joining with NOT_JOINED", async () => {
-    const c = connect();
-    const errP = once<{ code: string }>(c, "roster:error");
-    c.emit("claim", { position: "MID", nickname: "A" });
-    expect((await errP).code).toBe("NOT_JOINED");
-  });
-
-  it("rejects a join with a blank room code", async () => {
-    const c = connect();
-    const errP = once<{ code: string }>(c, "roster:error");
-    c.emit("join", { roomId: "   " });
-    expect((await errP).code).toBe("INVALID_ROOM");
+    const rel = once<StateDTO>(a, "state");
+    a.emit("release", { position: "ADC", clientId: "cA" });
+    expect((await rel).filled).toBe(0);
   });
 });
 
-describe("realtime roster gateway — room switching & eviction", () => {
-  it("releases the seat in the old room when a client switches rooms", async () => {
+describe("settings", () => {
+  it("broadcasts tier / queue / time updates", async () => {
     const a = connect();
-    const watcher = connect();
-    a.emit("join", { roomId: "old" });
+    a.emit("join", { roomId: "set" });
     await once(a, "state");
-    watcher.emit("join", { roomId: "old" });
-    await once(watcher, "state");
-
-    a.emit("claim", { position: "TOP", nickname: "A" });
-    await once(watcher, "state");
-
-    const freed = once<StateDTO>(watcher, "state");
-    a.emit("join", { roomId: "new" });
-    expect((await freed).filled).toBe(0);
+    const upd = once<StateDTO>(a, "state");
+    a.emit("settings:update", { tier: "GOLD", queue: "ARAM", scheduledAt: NOW + HOUR, clientId: "cA" });
+    const s = await upd;
+    expect(s.settings.tier).toBe("GOLD");
+    expect(s.settings.queue).toBe("ARAM");
+    expect(s.settings.scheduledAt).toBe(NOW + HOUR);
   });
 
-  it("reaps a room from the registry once its last seat is released", async () => {
-    const c = connect();
-    c.emit("join", { roomId: "solo" });
-    await once(c, "state");
-    c.emit("claim", { position: "ADC", nickname: "A" });
-    await once(c, "state");
-    expect(app.registry.size()).toBeGreaterThanOrEqual(1);
+  it("emits roster:error on an invalid tier", async () => {
+    const a = connect();
+    a.emit("join", { roomId: "t" });
+    await once(a, "state");
+    const err = once<{ code: string }>(a, "roster:error");
+    a.emit("settings:update", { tier: "WOOD", clientId: "cA" });
+    expect((await err).code).toBe("INVALID_TIER");
+  });
+});
 
-    const gone = once<StateDTO>(c, "state");
-    c.emit("release", { position: "ADC" });
-    await gone;
-    expect(app.registry.get("solo")).toBeUndefined();
+describe("game expiry (lazy)", () => {
+  it("opens a fresh game when the scheduled time passes", async () => {
+    const a = connect();
+    a.emit("join", { roomId: "exp" });
+    await once(a, "state");
+
+    let s = once<StateDTO>(a, "state");
+    a.emit("settings:update", { scheduledAt: NOW + HOUR, clientId: "cA" });
+    await s;
+
+    s = once<StateDTO>(a, "state");
+    a.emit("claim", { position: "MID", nickname: "A", clientId: "cA" });
+    expect((await s).filled).toBe(1);
+
+    clock = NOW + HOUR + 1; // 예정 시각 경과
+    a.emit("join", { roomId: "exp" });
+    const after = await once<StateDTO>(a, "state");
+    expect(after.gameId).toBe(2);
+    expect(after.filled).toBe(0);
+    expect(after.settings.scheduledAt).toBeNull();
   });
 });

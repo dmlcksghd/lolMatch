@@ -1,69 +1,75 @@
 import { describe, it, expect } from "vitest";
-import { RoomRegistry, DEFAULT_SETTINGS } from "../src/server/rooms";
+import { RoomRegistry } from "../src/server/rooms";
+import { DEFAULT_SETTINGS } from "../src/domain/game";
 
 const NOW = 1_700_000_000_000;
+const FUTURE = NOW + 3_600_000;
 
 describe("RoomRegistry", () => {
-  it("creates a room with default settings and an empty roster", () => {
+  it("creates a room with default settings and game 1", () => {
     const reg = new RoomRegistry();
-    const room = reg.getOrCreate("r1");
-    expect(room.settings).toEqual(DEFAULT_SETTINGS);
-    expect(reg.toDTO(room).filled).toBe(0);
+    const game = reg.getOrCreate("r1", NOW);
+    expect(game.settings).toEqual(DEFAULT_SETTINGS);
+    const dto = reg.toDTO("r1", game, NOW);
+    expect(dto.filled).toBe(0);
+    expect(dto.gameId).toBe(1);
   });
 
-  it("returns the same room state on repeated access", () => {
+  it("persists a claimed seat (not tied to a connection)", () => {
     const reg = new RoomRegistry();
-    reg.claim("r1", { position: "MID", nickname: "A", ownerId: "s1", now: NOW });
-    expect(reg.get("r1")).toBe(reg.getOrCreate("r1"));
-    expect(reg.toDTO(reg.getOrCreate("r1")).filled).toBe(1);
+    reg.claim("r1", { position: "MID", nickname: "A", ownerId: "c1", now: NOW }, NOW);
+    const dto = reg.toDTO("r1", reg.getOrCreate("r1", NOW), NOW);
+    expect(dto.filled).toBe(1);
+    expect(dto.seats.MID?.ownerId).toBe("c1");
   });
 
-  it("keeps rooms isolated from one another", () => {
+  it("keeps rooms isolated", () => {
     const reg = new RoomRegistry();
-    reg.claim("a", { position: "TOP", nickname: "A", ownerId: "s1", now: NOW });
-    expect(reg.toDTO(reg.getOrCreate("a")).filled).toBe(1);
-    expect(reg.toDTO(reg.getOrCreate("b")).filled).toBe(0);
+    reg.claim("a", { position: "TOP", nickname: "A", ownerId: "c1", now: NOW }, NOW);
+    expect(reg.toDTO("a", reg.getOrCreate("a", NOW), NOW).filled).toBe(1);
+    expect(reg.toDTO("b", reg.getOrCreate("b", NOW), NOW).filled).toBe(0);
   });
 
   it("propagates domain errors (position taken)", () => {
     const reg = new RoomRegistry();
-    reg.claim("r", { position: "ADC", nickname: "A", ownerId: "s1", now: NOW });
-    expect(() => reg.claim("r", { position: "ADC", nickname: "B", ownerId: "s2", now: NOW })).toThrowError(
-      expect.objectContaining({ code: "POSITION_TAKEN" }),
-    );
+    reg.claim("r", { position: "ADC", nickname: "A", ownerId: "c1", now: NOW }, NOW);
+    expect(() =>
+      reg.claim("r", { position: "ADC", nickname: "B", ownerId: "c2", now: NOW }, NOW),
+    ).toThrowError(expect.objectContaining({ code: "POSITION_TAKEN" }));
   });
 
-  it("releases a seat by owner on disconnect", () => {
+  it("releases a seat by its owner (clientId)", () => {
     const reg = new RoomRegistry();
-    reg.claim("r", { position: "SUP", nickname: "A", ownerId: "s1", now: NOW });
-    reg.releaseOwner("r", "s1");
-    expect(reg.toDTO(reg.getOrCreate("r")).filled).toBe(0);
+    reg.claim("r", { position: "SUP", nickname: "A", ownerId: "c1", now: NOW }, NOW);
+    reg.release("r", { position: "SUP", ownerId: "c1" }, NOW);
+    expect(reg.toDTO("r", reg.getOrCreate("r", NOW), NOW).filled).toBe(0);
   });
 
-  it("merges partial settings updates", () => {
+  it("updates tier / queue / time settings", () => {
     const reg = new RoomRegistry();
-    const room = reg.updateSettings("r", { time: "오후 8:30", tier: "골드·에메" });
-    expect(room.settings.time).toBe("오후 8:30");
-    expect(room.settings.queue).toBe(DEFAULT_SETTINGS.queue);
+    const game = reg.updateSettings("r", { tier: "GOLD", queue: "ARAM", scheduledAt: FUTURE }, NOW);
+    expect(game.settings.tier).toBe("GOLD");
+    expect(game.settings.queue).toBe("ARAM");
+    expect(game.settings.scheduledAt).toBe(FUTURE);
   });
 
-  it("exposes a wire DTO with roomId, seats and filled count", () => {
+  it("opens a fresh game (gameId 2, empty) once the scheduled time passes", () => {
     const reg = new RoomRegistry();
-    reg.claim("r", { position: "JGL", nickname: "정글러", ownerId: "s1", now: NOW });
-    const dto = reg.toDTO(reg.getOrCreate("r"));
-    expect(dto.roomId).toBe("r");
-    expect(dto.seats.JGL?.nickname).toBe("정글러");
-    expect(dto.filled).toBe(1);
+    reg.updateSettings("r", { scheduledAt: FUTURE }, NOW);
+    reg.claim("r", { position: "MID", nickname: "A", ownerId: "c1", now: NOW }, NOW);
+    const dto = reg.toDTO("r", reg.getOrCreate("r", FUTURE + 1), FUTURE + 1);
+    expect(dto.gameId).toBe(2);
+    expect(dto.filled).toBe(0);
+    expect(dto.settings.scheduledAt).toBeNull();
   });
-});
 
-describe("RoomRegistry eviction", () => {
-  it("removes a room and reports size", () => {
+  it("reports and removes pristine rooms", () => {
     const reg = new RoomRegistry();
-    reg.claim("r", { position: "MID", nickname: "A", ownerId: "s1", now: NOW });
-    expect(reg.size()).toBe(1);
+    reg.getOrCreate("r", NOW);
+    expect(reg.isPristineRoom("r")).toBe(true);
+    reg.claim("r", { position: "TOP", nickname: "A", ownerId: "c1", now: NOW }, NOW);
+    expect(reg.isPristineRoom("r")).toBe(false);
     reg.remove("r");
     expect(reg.size()).toBe(0);
-    expect(reg.get("r")).toBeUndefined();
   });
 });

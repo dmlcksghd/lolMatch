@@ -187,3 +187,57 @@ h1 .spark { color: var(--gold); }
 @media (prefers-reduced-motion: reduce) {
   * { transition-duration: 0.01ms !important; }
 }
+
+/* 설정(시간/티어/큐) */
+.settings {
+  margin-top: 0.5rem;
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr;
+  gap: 0.5rem;
+}
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+.field > span {
+  font-size: 0.63rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.field input,
+.field select {
+  font-family: var(--font);
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--ink);
+  background: color-mix(in oklab, var(--ground) 45%, transparent);
+  border: 1px solid color-mix(in oklab, var(--line) 60%, transparent);
+  border-radius: 9px;
+  padding: 0.45rem 0.5rem;
+  width: 100%;
+  min-width: 0;
+  transition: border-color var(--tap), box-shadow var(--tap);
+  color-scheme: light dark;
+}
+.field select { cursor: pointer; }
+.field input:focus-visible,
+.field select:focus-visible {
+  outline: none;
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--gold) 28%, transparent);
+}
+.deadline {
+  margin: 0.55rem 0 0;
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+}
+.deadline.soon { color: var(--danger); }
+@media (max-width: 380px) {
+  .settings { grid-template-columns: 1fr 1fr; }
+  .field:first-child { grid-column: 1 / -1; }
+}

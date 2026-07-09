@@ -1,75 +1,80 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { RoomRegistry } from "../src/server/rooms";
-import { DEFAULT_SETTINGS } from "../src/domain/game";
 
 const NOW = 1_700_000_000_000;
-const FUTURE = NOW + 3_600_000;
+const HOUR = 3_600_000;
+const code = (c: string) => expect.objectContaining({ code: c });
 
-describe("RoomRegistry", () => {
-  it("creates a room with default settings and game 1", () => {
-    const reg = new RoomRegistry();
-    const game = reg.getOrCreate("r1", NOW);
-    expect(game.settings).toEqual(DEFAULT_SETTINGS);
-    const dto = reg.toDTO("r1", game, NOW);
-    expect(dto.filled).toBe(0);
-    expect(dto.gameId).toBe(1);
+describe("RoomRegistry (party list)", () => {
+  let reg: RoomRegistry;
+  beforeEach(() => {
+    reg = new RoomRegistry();
   });
 
-  it("persists a claimed seat (not tied to a connection)", () => {
-    const reg = new RoomRegistry();
-    reg.claim("r1", { position: "MID", nickname: "A", ownerId: "c1", now: NOW }, NOW);
-    const dto = reg.toDTO("r1", reg.getOrCreate("r1", NOW), NOW);
-    expect(dto.filled).toBe(1);
-    expect(dto.seats.MID?.ownerId).toBe("c1");
+  const create = (room = "r", over: Record<string, unknown> = {}) =>
+    reg.createParty(room, {
+      clientId: "c1",
+      nickname: "A",
+      position: "MID",
+      settings: { queue: "SOLO" },
+      now: NOW,
+      ...over,
+    });
+
+  it("creates a party with the creator as first member", () => {
+    create();
+    const dto = reg.roomDTO("r", NOW);
+    expect(dto.parties).toHaveLength(1);
+    expect(dto.parties[0]?.count).toBe(1);
+    expect(dto.parties[0]?.members[0]?.clientId).toBe("c1");
+    expect(dto.parties[0]?.capacity).toBe(5);
   });
 
-  it("keeps rooms isolated", () => {
-    const reg = new RoomRegistry();
-    reg.claim("a", { position: "TOP", nickname: "A", ownerId: "c1", now: NOW }, NOW);
-    expect(reg.toDTO("a", reg.getOrCreate("a", NOW), NOW).filled).toBe(1);
-    expect(reg.toDTO("b", reg.getOrCreate("b", NOW), NOW).filled).toBe(0);
+  it("holds multiple parties per room", () => {
+    create();
+    create("r", { clientId: "c2", position: "TOP" });
+    expect(reg.roomDTO("r", NOW).parties).toHaveLength(2);
   });
 
-  it("propagates domain errors (position taken)", () => {
-    const reg = new RoomRegistry();
-    reg.claim("r", { position: "ADC", nickname: "A", ownerId: "c1", now: NOW }, NOW);
+  it("joins an existing party and caps at 5 members", () => {
+    const p = create();
+    for (const c of ["c2", "c3", "c4", "c5"]) {
+      reg.join("r", p.id, { clientId: c, nickname: c, position: "MID", now: NOW }, NOW);
+    }
+    expect(reg.roomDTO("r", NOW).parties[0]?.count).toBe(5);
     expect(() =>
-      reg.claim("r", { position: "ADC", nickname: "B", ownerId: "c2", now: NOW }, NOW),
-    ).toThrowError(expect.objectContaining({ code: "POSITION_TAKEN" }));
+      reg.join("r", p.id, { clientId: "c6", nickname: "F", position: "MID", now: NOW }, NOW),
+    ).toThrowError(code("PARTY_FULL"));
   });
 
-  it("releases a seat by its owner (clientId)", () => {
-    const reg = new RoomRegistry();
-    reg.claim("r", { position: "SUP", nickname: "A", ownerId: "c1", now: NOW }, NOW);
-    reg.release("r", { position: "SUP", ownerId: "c1" }, NOW);
-    expect(reg.toDTO("r", reg.getOrCreate("r", NOW), NOW).filled).toBe(0);
-  });
-
-  it("updates tier / queue / time settings", () => {
-    const reg = new RoomRegistry();
-    const game = reg.updateSettings("r", { tier: "GOLD", queue: "ARAM", scheduledAt: FUTURE }, NOW);
-    expect(game.settings.tier).toBe("GOLD");
-    expect(game.settings.queue).toBe("ARAM");
-    expect(game.settings.scheduledAt).toBe(FUTURE);
-  });
-
-  it("opens a fresh game (gameId 2, empty) once the scheduled time passes", () => {
-    const reg = new RoomRegistry();
-    reg.updateSettings("r", { scheduledAt: FUTURE }, NOW);
-    reg.claim("r", { position: "MID", nickname: "A", ownerId: "c1", now: NOW }, NOW);
-    const dto = reg.toDTO("r", reg.getOrCreate("r", FUTURE + 1), FUTURE + 1);
-    expect(dto.gameId).toBe(2);
-    expect(dto.filled).toBe(0);
-    expect(dto.settings.scheduledAt).toBeNull();
-  });
-
-  it("reports and removes pristine rooms", () => {
-    const reg = new RoomRegistry();
-    reg.getOrCreate("r", NOW);
-    expect(reg.isPristineRoom("r")).toBe(true);
-    reg.claim("r", { position: "TOP", nickname: "A", ownerId: "c1", now: NOW }, NOW);
-    expect(reg.isPristineRoom("r")).toBe(false);
-    reg.remove("r");
+  it("removes the party and the empty room when the last member leaves", () => {
+    const p = create();
+    reg.leave("r", p.id, "c1", NOW);
+    expect(reg.roomDTO("r", NOW).parties).toHaveLength(0);
     expect(reg.size()).toBe(0);
+  });
+
+  it("drops parties whose scheduled time has passed", () => {
+    create("r", { settings: { queue: "SOLO", scheduledAt: NOW + HOUR } });
+    expect(reg.roomDTO("r", NOW).parties).toHaveLength(1);
+    expect(reg.roomDTO("r", NOW + HOUR).parties).toHaveLength(0);
+  });
+
+  it("throws PARTY_NOT_FOUND when joining a missing party", () => {
+    expect(() =>
+      reg.join("r", "nope", { clientId: "x", nickname: "X", position: "MID", now: NOW }, NOW),
+    ).toThrowError(code("PARTY_NOT_FOUND"));
+  });
+
+  it("clears member positions when a party switches to ARAM", () => {
+    const p = create();
+    reg.updateSettings("r", p.id, { queue: "ARAM" }, NOW);
+    expect(reg.roomDTO("r", NOW).parties[0]?.members[0]?.position).toBeNull();
+  });
+
+  it("reports the earliest future expiry", () => {
+    create("r", { settings: { queue: "SOLO", scheduledAt: NOW + 2 * HOUR } });
+    create("r", { clientId: "c2", position: "TOP", settings: { queue: "SOLO", scheduledAt: NOW + HOUR } });
+    expect(reg.nextExpiry("r", NOW)).toBe(NOW + HOUR);
   });
 });

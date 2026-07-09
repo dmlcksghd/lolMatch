@@ -3,12 +3,13 @@
   "use strict";
 
   const MAX = 5;
+  const YEAR_MS = 365 * 24 * 60 * 60 * 1000; // 예정 시간 상한(약 1년)
   const LANES = [
-    { key: "TOP", label: "탑", icon: "⚔️" },
-    { key: "JGL", label: "정글", icon: "🌲" },
-    { key: "MID", label: "미드", icon: "✨" },
-    { key: "ADC", label: "원딜", icon: "🏹" },
-    { key: "SUP", label: "서폿", icon: "🛡️" },
+    { key: "TOP", label: "탑" },
+    { key: "JGL", label: "정글" },
+    { key: "MID", label: "미드" },
+    { key: "ADC", label: "원딜" },
+    { key: "SUP", label: "서폿" },
   ];
   const QUEUES = [
     ["NORMAL", "일반게임"],
@@ -56,6 +57,36 @@
     if (!v) return null;
     const t = new Date(v).getTime();
     return Number.isFinite(t) ? t : null;
+  }
+  // 네이티브 시간 입력의 연도 범위를 지금~1년으로 제한(6자리 연도 방지)
+  function setTimeBounds(input) {
+    const base = Date.now();
+    input.min = toLocalInput(base);
+    input.max = toLocalInput(base + YEAR_MS);
+  }
+  // 선택 시각 검증: 비면 null(시간 미정), 위반이면 false, 유효하면 ms
+  function readTimeFrom(input) {
+    const raw = input.value;
+    if (!raw) return null;
+    // 네이티브 min/max 위반(예: 6자리 연도) 차단
+    if (typeof input.checkValidity === "function" && !input.checkValidity()) {
+      toast("시간이 올바르지 않아요 (지금~1년 이내)");
+      return false;
+    }
+    const at = fromLocalInput(raw);
+    if (at === null) {
+      toast("시간 형식이 올바르지 않아요");
+      return false;
+    }
+    if (at <= Date.now()) {
+      toast("미래 시각을 선택하세요");
+      return false;
+    }
+    if (at > Date.now() + YEAR_MS) {
+      toast("너무 먼 시간이에요 (1년 이내로)");
+      return false;
+    }
+    return at;
   }
 
   // 클라이언트 신원 & 닉네임(로컬 저장)
@@ -115,7 +146,7 @@
     el.innerHTML = pairs.map(([v, l]) => `<option value="${v}">${l}</option>`).join("");
   }
   function fillPos(el) {
-    el.innerHTML = LANES.map((l) => `<option value="${l.key}">${l.icon} ${l.label}</option>`).join("");
+    el.innerHTML = LANES.map((l) => `<option value="${l.key}">${l.label}</option>`).join("");
   }
   fillSelect($("c-queue"), QUEUES);
   fillSelect($("c-tier"), TIERS);
@@ -124,6 +155,8 @@
   fillSelect($("d-tier"), TIERS);
   $("c-queue").value = "SOLO";
   $("c-tier").value = "ANY";
+  setTimeBounds($("c-time"));
+  setTimeBounds($("d-time"));
 
   // 상태 & 뷰
   let state = { parties: [] };
@@ -237,6 +270,7 @@
     // 설정 컨트롤 반영(포커스 중이 아닐 때만)
     setIfIdle($("d-queue"), p.settings.queue);
     setIfIdle($("d-tier"), p.settings.tier);
+    setTimeBounds($("d-time"));
     if (document.activeElement !== $("d-time")) $("d-time").value = p.settings.scheduledAt ? toLocalInput(p.settings.scheduledAt) : "";
 
     if (p.settings.scheduledAt) {
@@ -266,7 +300,7 @@
       const canJoin = !full || iAmIn; // 이미 참가자면 자리 이동 허용
       return `
       <div class="lane">
-        <div class="lane__id"><span class="lane__ic">${l.icon}</span><span>${l.label}</span></div>
+        <div class="lane__id"><span>${l.label}</span></div>
         <div class="lane__seats">
           ${here.map(chip).join("")}
           <button class="seat-add" data-join="${l.key}" type="button" ${canJoin ? "" : "disabled"}>+ 참가</button>
@@ -277,7 +311,7 @@
     if (stray.length) {
       rows.push(`
       <div class="lane lane--stray">
-        <div class="lane__id"><span class="lane__ic">❔</span><span>미지정</span></div>
+        <div class="lane__id"><span>미지정</span></div>
         <div class="lane__seats">${stray.map(chip).join("")}</div>
       </div>`);
     }
@@ -333,8 +367,8 @@
     socket.emit("party:settings", { partyId: view.partyId, clientId, tier: e.target.value }),
   );
   $("d-time").addEventListener("change", (e) => {
-    const at = fromLocalInput(e.target.value);
-    if (at !== null && at <= Date.now()) return toast("미래 시각을 선택하세요");
+    const at = readTimeFrom(e.target);
+    if (at === false) return;
     socket.emit("party:settings", { partyId: view.partyId, clientId, scheduledAt: at });
   });
 
@@ -355,15 +389,18 @@
 
   $("new-party").addEventListener("click", () => {
     createForm.hidden = !createForm.hidden;
-    if (!createForm.hidden) $("c-queue").focus();
+    if (!createForm.hidden) {
+      setTimeBounds($("c-time"));
+      $("c-queue").focus();
+    }
   });
   $("c-cancel").addEventListener("click", () => (createForm.hidden = true));
   createForm.addEventListener("submit", (e) => {
     e.preventDefault();
     if (!requireNick()) return;
     const queue = cQueue.value;
-    const at = fromLocalInput($("c-time").value);
-    if (at !== null && at <= Date.now()) return toast("미래 시각을 선택하세요");
+    const at = readTimeFrom($("c-time"));
+    if (at === false) return;
     const payload = { clientId, nickname: nick(), queue, tier: $("c-tier").value, scheduledAt: at };
     if (usesPositions(queue)) payload.position = $("c-pos").value;
     pendingEnter = true;

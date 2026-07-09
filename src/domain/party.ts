@@ -5,6 +5,8 @@ import { isTier, type Tier } from "./tiers";
 
 /** 파티 정원(총 인원, 포지션 중복 허용). */
 export const MAX_PARTY = 5;
+/** 예정 시각 상한(약 1년) — 6자리 연도 같은 비정상 입력 차단. */
+const MAX_FUTURE_MS = 366 * 24 * 60 * 60 * 1000;
 export const NICKNAME_MAX = 16;
 
 // 제로폭/양방향/제어 문자 제거(닉네임 위장 방지). ASCII 소스로 구성.
@@ -69,6 +71,9 @@ function normalizeScheduledAt(value: unknown, now: number): number | null {
   }
   if (value <= now) {
     throw new DomainError("INVALID_TIME", "미래 시각을 선택하세요.");
+  }
+  if (value > now + MAX_FUTURE_MS) {
+    throw new DomainError("INVALID_TIME", "너무 먼 시각입니다.");
   }
   return value;
 }

@@ -166,8 +166,7 @@ h1 .spark { color: var(--gold); }
   border-left: 3px solid color-mix(in oklab, var(--gold) 55%, var(--line));
 }
 .lane--stray { border-left-color: var(--danger); }
-.lane__id { display: flex; align-items: center; gap: 0.35rem; font-weight: 800; font-size: 0.9rem; }
-.lane__ic { font-size: 1.05rem; }
+.lane__id { display: flex; align-items: center; gap: 0.35rem; font-weight: 800; font-size: 0.95rem; }
 .lane__seats { display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; min-width: 0; }
 .chip {
   display: inline-flex; align-items: center; gap: 0.25rem; max-width: 100%;

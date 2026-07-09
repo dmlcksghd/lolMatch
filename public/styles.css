@@ -1,0 +1,189 @@
+:root {
+  color-scheme: light dark;
+  --ground: #ede6d4;
+  --ground-2: #e3d9c0;
+  --surface: #f6f1e4;
+  --surface-hi: #fbf7ec;
+  --ink: #12100b;
+  --ink-soft: #4a4436;
+  --muted: #7c745f;
+  --gold: #b0872f;
+  --gold-hi: #8c6a1e;
+  --line: #cbb88a;
+  --teal: #0a7c74;
+  --teal-hi: #0ac8b9;
+  --danger: #a23b2e;
+  --radius: 14px;
+  --tap: 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+  --font: "Pretendard", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic",
+    "Noto Sans KR", system-ui, sans-serif;
+  --mono: "SF Mono", "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground: #05080e; --ground-2: #091420; --surface: #0f2233; --surface-hi: #163149;
+    --ink: #f0e6d2; --ink-soft: #c8c2b0; --muted: #8a917e; --gold: #c8aa6e; --gold-hi: #f0dea8;
+    --line: #785a28; --teal: #0ac8b9; --teal-hi: #4fe9dd; --danger: #e06055;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  min-height: 100dvh;
+  font-family: var(--font);
+  color: var(--ink);
+  background: radial-gradient(120% 60% at 50% -10%, color-mix(in oklab, var(--gold) 14%, transparent), transparent 60%),
+    radial-gradient(90% 50% at 50% 110%, color-mix(in oklab, var(--teal) 12%, transparent), transparent 60%),
+    linear-gradient(180deg, var(--ground), var(--ground-2));
+  display: grid;
+  place-items: start center;
+  padding: clamp(1.1rem, 0.6rem + 3vw, 3rem) 1rem 3rem;
+}
+.stage { width: 100%; max-width: 27rem; display: flex; flex-direction: column; gap: 0.9rem; }
+.card {
+  background: linear-gradient(180deg, var(--surface-hi), var(--surface));
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: 0 1px 0 color-mix(in oklab, var(--gold) 40%, transparent) inset, 0 24px 60px -30px rgba(0, 0, 0, 0.65);
+  overflow: hidden;
+}
+.card__head {
+  position: relative;
+  padding: clamp(1.2rem, 0.9rem + 1.5vw, 1.7rem);
+  display: flex; flex-direction: column; gap: 0.55rem;
+  border-bottom: 1px solid color-mix(in oklab, var(--line) 60%, transparent);
+  background: linear-gradient(180deg, color-mix(in oklab, var(--gold) 9%, transparent), transparent 70%);
+}
+.card__head::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--gold), transparent);
+}
+.eyebrow {
+  font-size: 0.72rem; font-weight: 700; letter-spacing: 0.22em; text-transform: uppercase;
+  color: var(--gold); font-family: var(--mono);
+}
+h1 {
+  margin: 0; font-size: clamp(1.75rem, 1.3rem + 2.4vw, 2.35rem); font-weight: 800;
+  letter-spacing: -0.01em; line-height: 1.05; text-wrap: balance;
+}
+h1 .spark { color: var(--gold); }
+.meta { margin: 0.4rem 0 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; }
+.meta > div {
+  background: color-mix(in oklab, var(--ground) 40%, transparent);
+  border: 1px solid color-mix(in oklab, var(--line) 55%, transparent);
+  border-radius: 9px; padding: 0.5rem 0.6rem; display: flex; flex-direction: column; gap: 0.15rem;
+}
+.meta dt { font-size: 0.63rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.meta dd { margin: 0; font-size: 0.92rem; font-weight: 700; color: var(--ink); }
+.me {
+  padding: clamp(0.9rem, 0.7rem + 1vw, 1.15rem) clamp(1.2rem, 0.9rem + 1.5vw, 1.7rem) 0;
+  display: flex; flex-direction: column; gap: 0.4rem;
+}
+.me label { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.04em; color: var(--muted); }
+.me input {
+  font-family: var(--font); font-size: 1rem; color: var(--ink); background: var(--ground);
+  border: 1px solid var(--line); border-radius: 10px; padding: 0.7rem 0.85rem;
+  transition: border-color var(--tap), box-shadow var(--tap);
+}
+.me input::placeholder { color: var(--muted); }
+.me input:focus-visible {
+  outline: none; border-color: var(--gold);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--gold) 30%, transparent);
+}
+.lanes {
+  list-style: none; margin: 0.9rem 0 0; padding: 0 clamp(0.7rem, 0.5rem + 1vw, 1rem);
+  display: flex; flex-direction: column; gap: 0.5rem;
+}
+.lane {
+  --slot: var(--muted);
+  display: grid; grid-template-columns: 2.6rem 1fr auto; align-items: center; gap: 0.7rem;
+  width: 100%; text-align: left; padding: 0.7rem 0.8rem;
+  background: color-mix(in oklab, var(--ground) 30%, transparent);
+  border: 1px solid color-mix(in oklab, var(--line) 45%, transparent);
+  border-left: 3px solid var(--slot); border-radius: 11px; color: inherit; font-family: inherit;
+  cursor: pointer; transition: transform var(--tap), border-color var(--tap), background var(--tap);
+}
+.lane:hover:not(.lane--filled) {
+  transform: translateX(2px); border-color: var(--gold);
+  background: color-mix(in oklab, var(--gold) 12%, var(--ground));
+}
+.lane:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in oklab, var(--gold) 34%, transparent); }
+.lane__icon {
+  width: 2.6rem; height: 2.6rem; display: grid; place-items: center; border-radius: 9px;
+  background: radial-gradient(circle at 50% 30%, color-mix(in oklab, var(--slot) 26%, transparent), transparent 72%);
+  color: var(--slot);
+}
+.lane__icon svg { width: 24px; height: 24px; }
+.lane__label { display: flex; flex-direction: column; gap: 0.05rem; min-width: 0; }
+.lane__ko { font-weight: 800; font-size: 1.02rem; }
+.lane__en { font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.18em; color: var(--muted); }
+.lane__slot { justify-self: end; display: flex; align-items: center; gap: 0.5rem; min-width: 0; }
+.lane__pick {
+  font-size: 0.74rem; font-weight: 700; letter-spacing: 0.06em; color: var(--gold);
+  border: 1px dashed color-mix(in oklab, var(--gold) 55%, transparent);
+  border-radius: 999px; padding: 0.32rem 0.7rem; white-space: nowrap;
+}
+.lane__who {
+  font-weight: 800; font-size: 0.98rem; color: var(--teal-hi);
+  max-width: 8.5rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.lane__x {
+  flex: none; width: 1.7rem; height: 1.7rem; border-radius: 8px; display: grid; place-items: center;
+  border: 1px solid color-mix(in oklab, var(--danger) 45%, transparent);
+  background: color-mix(in oklab, var(--danger) 12%, transparent);
+  color: var(--danger); cursor: pointer; font-size: 1rem; line-height: 1;
+  transition: background var(--tap), transform var(--tap);
+}
+.lane__x:hover { background: color-mix(in oklab, var(--danger) 24%, transparent); transform: scale(1.06); }
+.lane--filled {
+  --slot: var(--teal); cursor: default;
+  background: color-mix(in oklab, var(--teal) 12%, var(--ground));
+  border-color: color-mix(in oklab, var(--teal) 45%, var(--line));
+}
+.lane--mine { box-shadow: 0 0 0 1px color-mix(in oklab, var(--teal) 45%, transparent) inset; }
+.card__foot {
+  margin-top: 0.95rem; padding: clamp(0.9rem, 0.7rem + 1vw, 1.2rem);
+  display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;
+  border-top: 1px solid color-mix(in oklab, var(--line) 55%, transparent);
+  background: color-mix(in oklab, var(--ground) 35%, transparent);
+}
+.count {
+  font-family: var(--mono); font-weight: 700; font-size: 1.05rem; font-variant-numeric: tabular-nums;
+  color: var(--ink); margin-right: auto; display: flex; align-items: baseline; gap: 0.3rem;
+}
+.count small { font-size: 0.68rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+.count strong { color: var(--gold); }
+.count.full strong { color: var(--teal-hi); }
+.conn {
+  font-size: 0.68rem; font-weight: 700; letter-spacing: 0.04em; color: var(--muted);
+  display: inline-flex; align-items: center; gap: 0.35rem;
+}
+.conn::before {
+  content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--muted);
+}
+.conn.on { color: var(--teal); }
+.conn.on::before { background: var(--teal-hi); box-shadow: 0 0 6px var(--teal-hi); }
+.btn {
+  font-family: var(--font); font-weight: 700; font-size: 0.82rem; padding: 0.55rem 0.9rem;
+  border-radius: 9px; cursor: pointer; border: 1px solid var(--line); background: transparent;
+  color: var(--ink-soft); transition: border-color var(--tap), color var(--tap), background var(--tap);
+}
+.btn:hover { border-color: var(--gold); color: var(--gold); }
+.btn:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in oklab, var(--gold) 30%, transparent); }
+.btn--primary {
+  background: linear-gradient(180deg, color-mix(in oklab, var(--gold) 92%, white), var(--gold));
+  color: #1a1206; border-color: var(--gold-hi);
+}
+.btn--primary:hover { color: #1a1206; filter: brightness(1.06); }
+.note { margin: 0; padding: 0 0.4rem; font-size: 0.76rem; line-height: 1.6; color: var(--muted); text-align: center; }
+.note b { color: var(--ink-soft); font-weight: 700; }
+.toast {
+  position: fixed; left: 50%; bottom: 1.4rem; transform: translate(-50%, 1rem);
+  background: var(--ink); color: var(--ground); font-size: 0.82rem; font-weight: 700;
+  padding: 0.6rem 1.1rem; border-radius: 999px; opacity: 0; pointer-events: none;
+  transition: opacity var(--tap), transform var(--tap); box-shadow: 0 12px 30px -12px rgba(0, 0, 0, 0.6);
+}
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+@media (prefers-reduced-motion: reduce) {
+  * { transition-duration: 0.01ms !important; }
+}

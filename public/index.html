@@ -2,62 +2,83 @@
 <html lang="ko">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>LOLMatch · 랭크 5인 모집</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>LOLMatch · 롤 파티 모집</title>
     <link
       rel="icon"
       href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎮</text></svg>"
     />
-    <meta property="og:title" content="롤 랭크 5인 모집" />
-    <meta property="og:description" content="탑·정글·미드·원딜·서폿 자리를 저장하고 실시간으로 공유하세요." />
+    <meta property="og:title" content="롤 파티 모집" />
+    <meta property="og:description" content="파티를 만들고 자리를 저장해 카카오톡 오픈채팅방에 공유하세요." />
     <meta property="og:type" content="website" />
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
     <main class="stage">
-      <article class="card" aria-labelledby="title">
+      <article class="card">
         <header class="card__head">
-          <div class="eyebrow">Ranked · 5인 파티 · <span id="gameno">1</span>번째</div>
-          <h1 id="title">게임 하실 분<span class="spark">!</span></h1>
-
-          <div class="settings" aria-label="게임 설정">
-            <label class="field">
-              <span>시간</span>
-              <input type="datetime-local" id="set-time" />
-            </label>
-            <label class="field">
-              <span>티어</span>
-              <select id="set-tier"></select>
-            </label>
-            <label class="field">
-              <span>큐</span>
-              <select id="set-queue"></select>
-            </label>
+          <div class="eyebrow">Ranked · 파티 모집</div>
+          <h1 id="title">롤 같이 하실 분<span class="spark">!</span></h1>
+          <div class="me">
+            <label for="nick">내 닉네임</label>
+            <input id="nick" type="text" maxlength="16" autocomplete="off" inputmode="text"
+              placeholder="예: 유자생강차" />
           </div>
-          <p class="deadline" id="deadline" hidden></p>
         </header>
 
-        <div class="me">
-          <label for="nick">내 닉네임</label>
-          <input id="nick" type="text" maxlength="16" autocomplete="off" placeholder="예: 유자생강차" />
-        </div>
+        <!-- 목록 뷰 -->
+        <section id="view-list" class="view">
+          <div class="list-head">
+            <span class="list-title">오늘의 파티 <b id="party-count">0</b></span>
+            <button class="btn btn--primary" id="new-party" type="button">+ 새 파티</button>
+          </div>
 
-        <ul class="lanes" id="lanes" aria-label="포지션 목록"></ul>
+          <form id="create-form" class="create" hidden>
+            <div class="create__grid">
+              <label class="field"><span>큐</span><select id="c-queue"></select></label>
+              <label class="field"><span>티어</span><select id="c-tier"></select></label>
+            </div>
+            <label class="field" id="c-pos-field"><span>내 포지션</span><select id="c-pos"></select></label>
+            <label class="field"><span>시간 (선택)</span><input type="datetime-local" id="c-time" /></label>
+            <div class="create__foot">
+              <button class="btn btn--ghost" id="c-cancel" type="button">취소</button>
+              <button class="btn btn--primary" id="c-make" type="submit">파티 만들기</button>
+            </div>
+          </form>
+
+          <ul id="party-list" class="parties" aria-label="파티 목록"></ul>
+          <p id="empty" class="empty" hidden>아직 파티가 없어요. <b>+ 새 파티</b>로 모집을 시작하세요.</p>
+        </section>
+
+        <!-- 상세 뷰 -->
+        <section id="view-detail" class="view" hidden>
+          <div class="detail-head">
+            <button class="btn btn--ghost" id="back" type="button">← 목록</button>
+            <span class="detail-meta" id="detail-meta"></span>
+          </div>
+          <div class="settings" id="detail-settings" aria-label="파티 설정">
+            <label class="field"><span>큐</span><select id="d-queue"></select></label>
+            <label class="field"><span>티어</span><select id="d-tier"></select></label>
+            <label class="field field--wide"><span>시간</span><input type="datetime-local" id="d-time" /></label>
+          </div>
+          <p class="deadline" id="deadline" hidden></p>
+          <div id="detail-roster" class="roster"></div>
+          <div class="detail-foot">
+            <div class="count" aria-live="polite"><strong id="detail-filled">0</strong> / 5</div>
+            <button class="btn btn--danger" id="leave" type="button" hidden>파티 나가기</button>
+          </div>
+        </section>
 
         <footer class="card__foot">
-          <div class="count" id="count" aria-live="polite">
-            <span><strong id="filled">0</strong> / 5</span>
-            <small>모집</small>
-          </div>
           <span class="conn" id="conn" title="연결 상태">연결 중…</span>
           <button class="btn" id="newroom" type="button">새 방</button>
-          <button class="btn btn--primary" id="copy" type="button">모집 링크 복사</button>
+          <button class="btn btn--primary" id="copy" type="button">링크 복사</button>
         </footer>
       </article>
 
       <p class="note">
-        방 코드 <b id="roomcode">—</b> · 자리를 누르면 <b>저장</b>되고, 창을 닫거나 나중에 들어와도 유지됩니다.
-        <b>모집 링크 복사</b>로 카카오톡 오픈채팅방에 붙여넣으세요.
+        방 코드 <b id="roomcode">—</b> · 파티를 눌러 자리를 <b>저장</b>하면 창을 닫아도 유지됩니다.
+        <b>링크 복사</b>로 카카오톡 오픈채팅방에 붙여넣으세요.
       </p>
     </main>
 

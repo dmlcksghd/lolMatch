@@ -86,7 +86,7 @@ export function registerRosterGateway(io: Server, registry: RoomRegistry, option
         registry.createParty(joined, {
           clientId,
           nickname: String(payload?.nickname ?? ""),
-          position: payload?.position,
+          positions: payload?.positions,
           settings: {
             tier: payload?.tier,
             queue: payload?.queue,
@@ -113,7 +113,7 @@ export function registerRosterGateway(io: Server, registry: RoomRegistry, option
           {
             clientId,
             nickname: String(payload?.nickname ?? ""),
-            position: payload?.position,
+            positions: payload?.positions,
             now: clock(),
           },
           clock(),

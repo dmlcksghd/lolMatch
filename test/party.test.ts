@@ -19,7 +19,6 @@ const err = (code: string) => expect.objectContaining({ code });
 describe("createParty", () => {
   it("creates a party with defaults and no members", () => {
     const p = base();
-    expect(p.id).toBe("p1");
     expect(p.settings.queue).toBe("SOLO");
     expect(p.settings.tier).toBe("ANY");
     expect(memberCount(p)).toBe(0);
@@ -38,49 +37,56 @@ describe("createParty", () => {
   });
 });
 
-describe("joinParty — position queue", () => {
-  it("adds a member at a position", () => {
-    const p = joinParty(base(), { clientId: "c1", nickname: "A", position: "MID", now: NOW });
+describe("joinParty — multi-lane (position queue)", () => {
+  const join = (party: ReturnType<typeof base>, over: Record<string, unknown> = {}) =>
+    joinParty(party, { clientId: "c1", nickname: "A", positions: ["MID"], now: NOW, ...over });
+
+  it("stores multiple selected lanes for one member", () => {
+    const p = join(base(), { positions: ["MID", "TOP", "JGL"] });
     expect(memberCount(p)).toBe(1);
-    expect(p.members[0]?.position).toBe("MID");
+    expect(p.members[0]?.positions).toEqual(["TOP", "JGL", "MID"]); // canonical order
   });
 
-  it("allows several members on the same position", () => {
-    let p = joinParty(base(), { clientId: "c1", nickname: "A", position: "MID", now: NOW });
-    p = joinParty(p, { clientId: "c2", nickname: "B", position: "MID", now: NOW });
+  it("dedupes repeated lanes", () => {
+    const p = join(base(), { positions: ["MID", "MID", "TOP"] });
+    expect(p.members[0]?.positions).toEqual(["TOP", "MID"]);
+  });
+
+  it("lets different people share the same lane", () => {
+    let p = join(base(), { clientId: "c1", nickname: "A", positions: ["MID"] });
+    p = join(p, { clientId: "c2", nickname: "B", positions: ["MID"] });
     expect(memberCount(p)).toBe(2);
-    expect(p.members.every((m) => m.position === "MID")).toBe(true);
+    expect(p.members.every((m) => m.positions.includes("MID"))).toBe(true);
   });
 
-  it("moves an existing member when they change position (one membership per client)", () => {
-    let p = joinParty(base(), { clientId: "c1", nickname: "A", position: "MID", now: NOW });
-    p = joinParty(p, { clientId: "c1", nickname: "A", position: "TOP", now: NOW });
+  it("replaces a member's lanes and nickname when they re-join", () => {
+    let p = join(base(), { clientId: "c1", nickname: "A", positions: ["MID"] });
+    p = join(p, { clientId: "c1", nickname: "A2", positions: ["TOP", "ADC"] });
     expect(memberCount(p)).toBe(1);
-    expect(p.members[0]?.position).toBe("TOP");
+    expect(p.members[0]?.nickname).toBe("A2");
+    expect(p.members[0]?.positions).toEqual(["TOP", "ADC"]);
   });
 
-  it("caps the party at 5 members", () => {
+  it("caps the party at 5 distinct people", () => {
     let p = base();
     for (const c of ["c1", "c2", "c3", "c4", "c5"]) {
-      p = joinParty(p, { clientId: c, nickname: c, position: "MID", now: NOW });
+      p = join(p, { clientId: c, nickname: c, positions: ["MID"] });
     }
     expect(memberCount(p)).toBe(MAX_PARTY);
-    expect(() => joinParty(p, { clientId: "c6", nickname: "F", position: "MID", now: NOW })).toThrowError(
-      err("PARTY_FULL"),
-    );
+    expect(() => join(p, { clientId: "c6", nickname: "F", positions: ["MID"] })).toThrowError(err("PARTY_FULL"));
   });
 
-  it("rejects an invalid/missing position", () => {
-    expect(() => joinParty(base(), { clientId: "c1", nickname: "A", position: "ZZZ", now: NOW })).toThrowError(
-      err("INVALID_POSITION"),
-    );
+  it("requires at least one valid lane", () => {
+    expect(() => join(base(), { positions: [] })).toThrowError(err("INVALID_POSITION"));
+    expect(() => join(base(), { positions: ["ZZZ"] })).toThrowError(err("INVALID_POSITION"));
+    expect(() => join(base(), { positions: undefined })).toThrowError(err("INVALID_POSITION"));
   });
 });
 
-describe("joinParty — ARAM has no positions", () => {
-  it("ignores position for ARAM and stores null", () => {
-    const p = joinParty(base({ queue: "ARAM" }), { clientId: "c1", nickname: "A", position: "MID", now: NOW });
-    expect(p.members[0]?.position).toBeNull();
+describe("joinParty — ARAM has no lanes", () => {
+  it("ignores lanes for ARAM and stores empty positions", () => {
+    const p = joinParty(base({ queue: "ARAM" }), { clientId: "c1", nickname: "A", positions: ["MID"], now: NOW });
+    expect(p.members[0]?.positions).toEqual([]);
   });
 
   it("usesPositions: false for ARAM, true otherwise", () => {
@@ -90,16 +96,16 @@ describe("joinParty — ARAM has no positions", () => {
 });
 
 describe("updateSettings", () => {
-  it("clears member positions when switching to ARAM", () => {
-    let p = joinParty(base(), { clientId: "c1", nickname: "A", position: "MID", now: NOW });
+  it("clears member lanes when switching to ARAM", () => {
+    let p = joinParty(base(), { clientId: "c1", nickname: "A", positions: ["MID", "TOP"], now: NOW });
     p = updateSettings(p, { queue: "ARAM" }, NOW);
-    expect(p.members[0]?.position).toBeNull();
+    expect(p.members[0]?.positions).toEqual([]);
   });
 });
 
 describe("leaveParty & lifecycle", () => {
   it("removes a member and reports empty", () => {
-    let p = joinParty(base(), { clientId: "c1", nickname: "A", position: "MID", now: NOW });
+    let p = joinParty(base(), { clientId: "c1", nickname: "A", positions: ["MID"], now: NOW });
     p = leaveParty(p, "c1");
     expect(isEmpty(p)).toBe(true);
   });

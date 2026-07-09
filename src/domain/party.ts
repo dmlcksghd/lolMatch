@@ -1,15 +1,14 @@
 import { DomainError } from "./errors";
-import { isPosition, type Position } from "./positions";
+import { POSITIONS, isPosition, type Position } from "./positions";
 import { isQueue, type Queue } from "./queues";
 import { isTier, type Tier } from "./tiers";
 
-/** 파티 정원(총 인원, 포지션 중복 허용). */
+/** 파티 정원(총 인원 = 서로 다른 사람 수). 한 사람이 여러 라인 선택 가능. */
 export const MAX_PARTY = 5;
+export const NICKNAME_MAX = 16;
 /** 예정 시각 상한(약 1년) — 6자리 연도 같은 비정상 입력 차단. */
 const MAX_FUTURE_MS = 366 * 24 * 60 * 60 * 1000;
-export const NICKNAME_MAX = 16;
 
-// 제로폭/양방향/제어 문자 제거(닉네임 위장 방지). ASCII 소스로 구성.
 const UNSAFE_CHARS = new RegExp(
   "[" + "\\u0000-\\u001F" + "\\u007F" + "\\u200B-\\u200F" + "\\u202A-\\u202E" + "\\u2066-\\u2069" + "]",
   "g",
@@ -24,8 +23,8 @@ export interface PartySettings {
 export interface Member {
   clientId: string;
   nickname: string;
-  /** ARAM 등 포지션이 없는 큐에서는 null. */
-  position: Position | null;
+  /** 선택한 라인들(중복 없음, 여러 개 가능). ARAM 등 포지션 없는 큐에서는 빈 배열. */
+  positions: Position[];
   joinedAt: number;
 }
 
@@ -45,7 +44,7 @@ export interface SettingsPatch {
 export interface JoinInput {
   clientId: string;
   nickname: string;
-  position?: unknown;
+  positions?: unknown;
   now: number;
 }
 
@@ -78,6 +77,18 @@ function normalizeScheduledAt(value: unknown, now: number): number | null {
   return value;
 }
 
+/** 라인 배열을 검증·중복제거하고 표준 순서로 정렬. 최소 1개 필요. */
+function normalizePositions(value: unknown): Position[] {
+  if (!Array.isArray(value)) throw new DomainError("INVALID_POSITION", "라인을 선택하세요.");
+  const chosen: Position[] = [];
+  for (const p of value) {
+    if (!isPosition(p)) throw new DomainError("INVALID_POSITION", "알 수 없는 라인입니다.");
+    if (!chosen.includes(p)) chosen.push(p);
+  }
+  if (chosen.length === 0) throw new DomainError("INVALID_POSITION", "라인을 하나 이상 선택하세요.");
+  return POSITIONS.filter((p) => chosen.includes(p));
+}
+
 function resolveSettings(patch: SettingsPatch, base: PartySettings, now: number): PartySettings {
   const settings: PartySettings = { ...base };
   if (patch.queue !== undefined) {
@@ -100,34 +111,28 @@ export function createParty(id: string, patch: SettingsPatch, now: number): Part
 
 export function updateSettings(party: Party, patch: SettingsPatch, now: number): Party {
   const settings = resolveSettings(patch, party.settings, now);
-  // 포지션이 없는 큐(칼바람)로 바꾸면 기존 멤버의 포지션을 모두 비운다.
+  // 포지션이 없는 큐(칼바람)로 바꾸면 기존 멤버의 라인 선택을 모두 비운다.
   const members = usesPositions(settings.queue)
     ? party.members
-    : party.members.map((m) => (m.position === null ? m : { ...m, position: null }));
+    : party.members.map((m) => (m.positions.length ? { ...m, positions: [] } : m));
   return { ...party, settings, members };
 }
 
 export function joinParty(party: Party, input: JoinInput): Party {
   const nickname = normalizeNickname(input.nickname);
-  let position: Position | null;
-  if (usesPositions(party.settings.queue)) {
-    if (!isPosition(input.position)) throw new DomainError("INVALID_POSITION", "포지션을 선택하세요.");
-    position = input.position;
-  } else {
-    position = null;
-  }
+  const positions = usesPositions(party.settings.queue) ? normalizePositions(input.positions) : [];
 
   const idx = party.members.findIndex((m) => m.clientId === input.clientId);
   if (idx >= 0) {
-    // 이미 참가한 사람: 포지션/닉네임만 갱신(정원 미소비).
-    const members = party.members.map((m, i) => (i === idx ? { ...m, nickname, position } : m));
+    // 이미 참가한 사람: 닉네임·라인을 통째로 새 선택으로 교체(이름 바꾸면 선택도 갱신됨).
+    const members = party.members.map((m, i) => (i === idx ? { ...m, nickname, positions } : m));
     return { ...party, members };
   }
 
   if (party.members.length >= MAX_PARTY) {
     throw new DomainError("PARTY_FULL", `파티가 가득 찼습니다(최대 ${MAX_PARTY}명).`);
   }
-  const member: Member = { clientId: input.clientId, nickname, position, joinedAt: input.now };
+  const member: Member = { clientId: input.clientId, nickname, positions, joinedAt: input.now };
   return { ...party, members: [...party.members, member] };
 }
 

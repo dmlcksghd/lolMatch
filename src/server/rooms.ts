@@ -14,7 +14,7 @@ import { DomainError } from "../domain/errors";
 export interface MemberDTO {
   clientId: string;
   nickname: string;
-  position: string | null;
+  positions: string[];
 }
 
 export interface PartyDTO {
@@ -34,7 +34,7 @@ export interface RoomDTO {
 export interface CreateInput {
   clientId: string;
   nickname: string;
-  position?: unknown;
+  positions?: unknown;
   settings?: SettingsPatch;
   now: number;
 }
@@ -81,7 +81,7 @@ export class RoomRegistry {
     const withCreator = joinParty(created, {
       clientId: input.clientId,
       nickname: input.nickname,
-      position: input.position,
+      positions: input.positions,
       now: input.now,
     });
     this.rooms.set(roomId, [...list, withCreator]);
@@ -144,7 +144,7 @@ function toPartyDTO(p: Party): PartyDTO {
   return {
     id: p.id,
     settings: { tier: p.settings.tier, queue: p.settings.queue, scheduledAt: p.settings.scheduledAt },
-    members: p.members.map((m) => ({ clientId: m.clientId, nickname: m.nickname, position: m.position })),
+    members: p.members.map((m) => ({ clientId: m.clientId, nickname: m.nickname, positions: m.positions })),
     count: p.members.length,
     capacity: MAX_PARTY,
   };

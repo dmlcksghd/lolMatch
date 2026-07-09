@@ -18,18 +18,18 @@
       <article class="card">
         <header class="card__head">
           <div class="eyebrow">Ranked · 파티 모집</div>
-          <h1 id="title">롤 같이 하실 분<span class="spark">!</span></h1>
+          <h1 id="title">롤챠쿠챠<span class="spark">!</span></h1>
           <div class="me">
             <label for="nick">내 닉네임</label>
             <input id="nick" type="text" maxlength="16" autocomplete="off" inputmode="text"
-              placeholder="예: 유자생강차" />
+              placeholder="카카오톡 닉네임을 입력" />
           </div>
         </header>
 
         <!-- 목록 뷰 -->
         <section id="view-list" class="view">
           <div class="list-head">
-            <span class="list-title">오늘의 파티 <b id="party-count">0</b></span>
+            <span class="list-title">파티 목록 <b id="party-count">0</b></span>
             <button class="btn btn--primary" id="new-party" type="button">+ 새 파티</button>
           </div>
 
@@ -38,7 +38,7 @@
               <label class="field"><span>큐</span><select id="c-queue"></select></label>
               <label class="field"><span>티어</span><select id="c-tier"></select></label>
             </div>
-            <label class="field"><span>시간 <em class="req">*필수</em></span><input type="datetime-local" id="c-time" required /></label>
+            <label class="field"><span>시간 <em class="req">*필수</em></span><div class="time-row"><input type="datetime-local" id="c-time" required /><button type="button" class="btn btn--ghost time-close" data-close="c-time">닫기</button></div></label>
             <div class="field" id="c-pos-field">
               <span>내 라인 · 여러 개 선택 가능</span>
               <div class="lane-pick" id="c-lanes"></div>
@@ -62,7 +62,7 @@
           <div class="settings" id="detail-settings" aria-label="파티 설정">
             <label class="field"><span>큐</span><select id="d-queue"></select></label>
             <label class="field"><span>티어</span><select id="d-tier"></select></label>
-            <label class="field field--wide"><span>시간</span><input type="datetime-local" id="d-time" /></label>
+            <label class="field field--wide"><span>시간</span><div class="time-row"><input type="datetime-local" id="d-time" /><button type="button" class="btn btn--ghost time-close" data-close="d-time">닫기</button></div></label>
           </div>
           <p class="deadline" id="deadline" hidden></p>
           <div class="join-panel" id="join-panel">
@@ -89,6 +89,7 @@
         방 코드 <b id="roomcode">—</b> · 파티를 눌러 자리를 <b>저장</b>하면 창을 닫아도 유지됩니다.
         <b>링크 복사</b>로 카카오톡 오픈채팅방에 붙여넣으세요.
       </p>
+      <p class="credit">만든사람: hong, SED</p>
     </main>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>

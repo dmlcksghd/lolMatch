@@ -13,13 +13,13 @@
 1. https://render.com 가입 → **GitHub로 로그인**.
 2. 대시보드 우상단 **New +** → **Blueprint**.
 3. `dmlcksghd/lolMatch` 저장소 선택(처음이면 **Render의 GitHub 접근 승인** — private 저장소라 승인 필요).
-4. Render가 `render.yaml`을 읽어 서비스 `lolmatch`(무료, `dev` 브랜치)를 제안 → **Apply**.
+4. Render가 `render.yaml`을 읽어 서비스 `lolmatch`(무료, `main` 브랜치)를 제안 → **Apply**.
 5. 첫 빌드 2~4분 대기 → `https://lolmatch-XXXX.onrender.com` 주소 발급.
 
 ## 방법 B — 수동(블루프린트가 안 보일 때)
 1. **New +** → **Web Service** → 저장소 `lolMatch` 연결.
 2. 설정값:
-   - Branch: **dev**
+   - Branch: **main**
    - Runtime: **Node**
    - Build Command: **npm ci**
    - Start Command: **npm start**
@@ -30,7 +30,7 @@
 ## 배포 후
 - 발급된 주소 뒤에 방 코드를 붙여 카카오톡 오픈채팅방에 공유:
   `https://lolmatch-XXXX.onrender.com/?room=우리방`
-- 코드를 고치면: `dev`에 push → Render가 자동 재배포(`autoDeploy: true`).
+- 개발은 `dev`에서 하고, 배포하려면 `dev`를 `main`에 머지·push → Render가 자동 재배포(`autoDeploy: true`).
 
 ## 무료 플랜 주의점
 - **15분 동안 아무도 안 들어오면 서버가 잠든다.** 다음 사람이 링크를 누르면
@@ -39,7 +39,7 @@
   영속화가 필요하면 [ROADMAP.md](ROADMAP.md) #2 참고.
 
 ## 대안
-- **Railway**: railway.app → New Project → Deploy from GitHub → `lolMatch`/`dev`.
+- **Railway**: railway.app → New Project → Deploy from GitHub → `lolMatch`/`main`.
   Start `npm start`, 자동 감지. 무료 크레딧 소진 시 유료.
 - **임시 공개(터널)**: 로컬 `npm run dev` 실행 후 다른 터미널에서
   `npx cloudflared tunnel --url http://localhost:3000` → 임시 `https://…trycloudflare.com` 링크.

@@ -1,0 +1,14 @@
+# Render Blueprint — https://render.com  (New + → Blueprint → 이 저장소 선택)
+services:
+  - type: web
+    name: lolmatch
+    runtime: node
+    plan: free
+    branch: dev
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "20"

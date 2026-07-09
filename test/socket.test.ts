@@ -32,136 +32,102 @@ function once<T>(s: ClientSocket, ev: string): Promise<T> {
   return new Promise((res) => s.once(ev, res as (v: unknown) => void));
 }
 
-interface StateDTO {
+interface RoomDTO {
   roomId: string;
-  gameId: number;
-  filled: number;
-  settings: { tier: string; queue: string; scheduledAt: number | null };
-  seats: Record<string, { nickname: string; ownerId: string } | null>;
+  now: number;
+  parties: Array<{
+    id: string;
+    count: number;
+    capacity: number;
+    settings: { queue: string; tier: string; scheduledAt: number | null };
+    members: Array<{ clientId: string; nickname: string; position: string | null }>;
+  }>;
 }
 
-describe("gateway — join & claim", () => {
-  it("sends game state on join", async () => {
-    const c = connect();
-    c.emit("join", { roomId: "r1" });
-    const s = await once<StateDTO>(c, "state");
-    expect(s.gameId).toBe(1);
-    expect(s.filled).toBe(0);
-    expect(s.settings.queue).toBe("SOLO");
+async function join(s: ClientSocket, roomId = "room-1"): Promise<RoomDTO> {
+  const p = once<RoomDTO>(s, "room:state");
+  s.emit("join", { roomId });
+  return p;
+}
+
+describe("socket party gateway", () => {
+  it("starts with an empty party list", async () => {
+    const s = connect();
+    const state = await join(s);
+    expect(state.parties).toEqual([]);
   });
 
-  it("broadcasts a claim to everyone in the room", async () => {
+  it("creates a party and broadcasts it to everyone in the room", async () => {
     const a = connect();
     const b = connect();
-    a.emit("join", { roomId: "r" });
-    await once(a, "state");
-    b.emit("join", { roomId: "r" });
-    await once(b, "state");
-    const upd = once<StateDTO>(b, "state");
-    a.emit("claim", { position: "MID", nickname: "유자생강차", clientId: "cA" });
-    const s = await upd;
-    expect(s.seats.MID?.nickname).toBe("유자생강차");
-    expect(s.filled).toBe(1);
+    await join(a);
+    await join(b);
+    const bSees = once<RoomDTO>(b, "room:state");
+    a.emit("party:create", { clientId: "ca", nickname: "Alice", position: "MID", queue: "SOLO" });
+    const state = await bSees;
+    expect(state.parties).toHaveLength(1);
+    expect(state.parties[0]?.members[0]?.nickname).toBe("Alice");
+    expect(state.parties[0]?.members[0]?.position).toBe("MID");
   });
 
-  it("rejects a claim without a clientId", async () => {
-    const c = connect();
-    c.emit("join", { roomId: "r" });
-    await once(c, "state");
-    const err = once<{ code: string }>(c, "roster:error");
-    c.emit("claim", { position: "MID", nickname: "A" });
-    expect((await err).code).toBe("NO_CLIENT");
-  });
-
-  it("emits roster:error on an invalid position", async () => {
-    const c = connect();
-    c.emit("join", { roomId: "r" });
-    await once(c, "state");
-    const err = once<{ code: string }>(c, "roster:error");
-    c.emit("claim", { position: "ZZZ", nickname: "A", clientId: "cA" });
-    expect((await err).code).toBe("INVALID_POSITION");
-  });
-});
-
-describe("persistence — seats survive disconnect", () => {
-  it("keeps a claimed seat after the claimer disconnects", async () => {
+  it("lets a second person join the same party at the same position", async () => {
     const a = connect();
-    a.emit("join", { roomId: "keep" });
-    await once(a, "state");
-    const claimed = once<StateDTO>(a, "state");
-    a.emit("claim", { position: "TOP", nickname: "방장", clientId: "cA" });
-    await claimed;
-    a.close();
-    await new Promise((r) => setTimeout(r, 50));
     const b = connect();
-    b.emit("join", { roomId: "keep" });
-    const s = await once<StateDTO>(b, "state");
-    expect(s.filled).toBe(1);
-    expect(s.seats.TOP?.nickname).toBe("방장");
-  });
-});
-
-describe("release ownership by clientId", () => {
-  it("lets the owner release, rejects others", async () => {
-    const a = connect();
-    a.emit("join", { roomId: "rel" });
-    await once(a, "state");
-    const claimed = once<StateDTO>(a, "state");
-    a.emit("claim", { position: "ADC", nickname: "A", clientId: "cA" });
-    await claimed;
-
-    const err = once<{ code: string }>(a, "roster:error");
-    a.emit("release", { position: "ADC", clientId: "cX" });
-    expect((await err).code).toBe("NOT_SEAT_OWNER");
-
-    const rel = once<StateDTO>(a, "state");
-    a.emit("release", { position: "ADC", clientId: "cA" });
-    expect((await rel).filled).toBe(0);
-  });
-});
-
-describe("settings", () => {
-  it("broadcasts tier / queue / time updates", async () => {
-    const a = connect();
-    a.emit("join", { roomId: "set" });
-    await once(a, "state");
-    const upd = once<StateDTO>(a, "state");
-    a.emit("settings:update", { tier: "GOLD", queue: "ARAM", scheduledAt: NOW + HOUR, clientId: "cA" });
-    const s = await upd;
-    expect(s.settings.tier).toBe("GOLD");
-    expect(s.settings.queue).toBe("ARAM");
-    expect(s.settings.scheduledAt).toBe(NOW + HOUR);
+    await join(a);
+    await join(b);
+    const created = once<RoomDTO>(a, "room:state");
+    a.emit("party:create", { clientId: "ca", nickname: "Alice", position: "MID", queue: "SOLO" });
+    const pid = (await created).parties[0]!.id;
+    const joined = once<RoomDTO>(a, "room:state");
+    b.emit("party:join", { partyId: pid, clientId: "cb", nickname: "Bob", position: "MID" });
+    const s2 = await joined;
+    expect(s2.parties[0]?.count).toBe(2);
+    expect(s2.parties[0]?.members.every((m) => m.position === "MID")).toBe(true);
   });
 
-  it("emits roster:error on an invalid tier", async () => {
+  it("stores no positions for an ARAM party", async () => {
     const a = connect();
-    a.emit("join", { roomId: "t" });
-    await once(a, "state");
-    const err = once<{ code: string }>(a, "roster:error");
-    a.emit("settings:update", { tier: "WOOD", clientId: "cA" });
-    expect((await err).code).toBe("INVALID_TIER");
+    await join(a);
+    const created = once<RoomDTO>(a, "room:state");
+    a.emit("party:create", { clientId: "ca", nickname: "Alice", position: "MID", queue: "ARAM" });
+    const s = await created;
+    expect(s.parties[0]?.settings.queue).toBe("ARAM");
+    expect(s.parties[0]?.members[0]?.position).toBeNull();
   });
-});
 
-describe("game expiry (lazy)", () => {
-  it("opens a fresh game when the scheduled time passes", async () => {
+  it("removes a party when the last member leaves", async () => {
     const a = connect();
-    a.emit("join", { roomId: "exp" });
-    await once(a, "state");
+    await join(a);
+    const created = once<RoomDTO>(a, "room:state");
+    a.emit("party:create", { clientId: "ca", nickname: "Alice", position: "MID", queue: "SOLO" });
+    const pid = (await created).parties[0]!.id;
+    const left = once<RoomDTO>(a, "room:state");
+    a.emit("party:leave", { partyId: pid, clientId: "ca" });
+    expect((await left).parties).toHaveLength(0);
+  });
 
-    let s = once<StateDTO>(a, "state");
-    a.emit("settings:update", { scheduledAt: NOW + HOUR, clientId: "cA" });
-    await s;
+  it("emits party:error on an invalid nickname", async () => {
+    const a = connect();
+    await join(a);
+    const err = once<{ code: string }>(a, "party:error");
+    a.emit("party:create", { clientId: "ca", nickname: "", position: "MID", queue: "SOLO" });
+    expect((await err).code).toBe("INVALID_NICKNAME");
+  });
 
-    s = once<StateDTO>(a, "state");
-    a.emit("claim", { position: "MID", nickname: "A", clientId: "cA" });
-    expect((await s).filled).toBe(1);
-
-    clock = NOW + HOUR + 1; // 예정 시각 경과
-    a.emit("join", { roomId: "exp" });
-    const after = await once<StateDTO>(a, "state");
-    expect(after.gameId).toBe(2);
-    expect(after.filled).toBe(0);
-    expect(after.settings.scheduledAt).toBeNull();
+  it("expires a scheduled party after its time passes (lazy on next join)", async () => {
+    const a = connect();
+    await join(a);
+    const created = once<RoomDTO>(a, "room:state");
+    a.emit("party:create", {
+      clientId: "ca",
+      nickname: "Alice",
+      position: "MID",
+      queue: "SOLO",
+      scheduledAt: NOW + HOUR,
+    });
+    expect((await created).parties).toHaveLength(1);
+    clock = NOW + HOUR;
+    const b = connect();
+    expect((await join(b)).parties).toHaveLength(0);
   });
 });

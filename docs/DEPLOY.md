@@ -44,3 +44,19 @@
 - **임시 공개(터널)**: 로컬 `npm run dev` 실행 후 다른 터미널에서
   `npx cloudflared tunnel --url http://localhost:3000` → 임시 `https://…trycloudflare.com` 링크.
   내 컴퓨터를 끄면 링크도 죽는다.
+
+## 서버 잠들지 않게(킵얼라이브)
+Render 무료는 15분간 접속이 없으면 잠들고, 깨어날 때 30~60초 걸린다. **외부에서** 주기적으로
+깨워주면 계속 살아 있다(서버가 자기 자신에게 보내는 핑은 소용없음 — 인바운드 요청이어야 함).
+
+**권장: UptimeRobot(무료)**
+1. https://uptimerobot.com 가입 → Add New Monitor.
+2. Type: HTTP(s), URL: `https://<배포주소>/healthz`, 간격: 5분 → 생성. 끝.
+
+**대안: 저장소 GitHub Actions(백업)**
+- 배포 후, 리포지토리 **Settings → Secrets and variables → Actions → Variables** 에
+  `PING_URL = https://<배포주소>` 추가. `.github/workflows/keepalive.yml`가 10분마다 호출.
+  (GitHub 크론은 지연이 잦아 보조 수단으로만.)
+
+> 주의: 킵얼라이브는 *잠들기*만 막는다. **코드 재배포·Render 재시작 때는 인메모리가 초기화**된다.
+> 완전 영속이 필요하면 외부 DB로 교체([ROADMAP.md](ROADMAP.md)).

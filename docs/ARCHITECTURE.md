@@ -76,3 +76,21 @@ RoomSettings = { title, time, tier, queue }
 - **다중 인스턴스**: 인메모리 → Redis 어댑터 + Socket.IO Redis 어댑터(pub/sub)로 브로드캐스트 팬아웃.
 - **영속성**: `RoomRegistry`를 인터페이스로 추출 → SQLite/Redis 구현 주입.
 - **소유권 안정화**: `ownerId`를 소켓 id가 아니라 localStorage 기반 클라이언트 토큰으로 (ROADMAP #1).
+
+## 업데이트 — v0.2 데이터 모델·이벤트
+
+```ts
+GameSettings = { tier: Tier; queue: Queue; scheduledAt: number | null }
+Game = { id: number; settings: GameSettings; roster: RosterState }  // id는 만료마다 +1
+```
+- **소유권**: `Seat.ownerId` = 브라우저 `clientId`(localStorage UUID). 소켓 id 아님 → 재접속에도 유지.
+- **지연 만료**: 접근 시 `expireIfDue(game, now)`로 예정 시각 경과를 검사해 새 게임으로 교체.
+  접속자에겐 예정 시각에 맞춘 서버 타이머가 자동 반영(unref).
+- **이벤트 추가**: `settings:update { tier?, queue?, scheduledAt?, clientId }`.
+  `claim/release`는 이제 `clientId`를 함께 받음. 연결 종료로 자리를 풀지 않음(기본 미사용 방만 정리).
+- **오류 코드 추가**: `INVALID_TIER` · `INVALID_QUEUE` · `INVALID_TIME`.
+- 티어/큐 단일 출처: `src/domain/tiers.ts` · `src/domain/queues.ts`.
+```
+
+전송 계층(`server/rooms.ts`)이 저장 경계라, 인메모리→Redis 교체 지점이 여기 하나로 모인다.
+```

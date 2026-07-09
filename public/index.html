@@ -9,7 +9,7 @@
       href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎮</text></svg>"
     />
     <meta property="og:title" content="롤 랭크 5인 모집" />
-    <meta property="og:description" content="탑·정글·미드·원딜·서폿 자리를 실시간으로 잡아보세요." />
+    <meta property="og:description" content="탑·정글·미드·원딜·서폿 자리를 저장하고 실시간으로 공유하세요." />
     <meta property="og:type" content="website" />
     <link rel="stylesheet" href="/styles.css" />
   </head>
@@ -17,13 +17,24 @@
     <main class="stage">
       <article class="card" aria-labelledby="title">
         <header class="card__head">
-          <div class="eyebrow">Ranked · 5인 파티</div>
+          <div class="eyebrow">Ranked · 5인 파티 · <span id="gameno">1</span>번째</div>
           <h1 id="title">게임 하실 분<span class="spark">!</span></h1>
-          <dl class="meta">
-            <div><dt>시간</dt><dd data-meta="time">—</dd></div>
-            <div><dt>티어</dt><dd data-meta="tier">—</dd></div>
-            <div><dt>큐</dt><dd data-meta="queue">—</dd></div>
-          </dl>
+
+          <div class="settings" aria-label="게임 설정">
+            <label class="field">
+              <span>시간</span>
+              <input type="datetime-local" id="set-time" />
+            </label>
+            <label class="field">
+              <span>티어</span>
+              <select id="set-tier"></select>
+            </label>
+            <label class="field">
+              <span>큐</span>
+              <select id="set-queue"></select>
+            </label>
+          </div>
+          <p class="deadline" id="deadline" hidden></p>
         </header>
 
         <div class="me">
@@ -45,7 +56,7 @@
       </article>
 
       <p class="note">
-        방 코드 <b id="roomcode">—</b> · 같은 링크에 들어온 사람끼리 실시간으로 자리가 공유됩니다.
+        방 코드 <b id="roomcode">—</b> · 자리를 누르면 <b>저장</b>되고, 창을 닫거나 나중에 들어와도 유지됩니다.
         <b>모집 링크 복사</b>로 카카오톡 오픈채팅방에 붙여넣으세요.
       </p>
     </main>

@@ -155,7 +155,7 @@
 
   // 라인 다중 선택 토글
   const createSel = new Set();
-  let detailSel = new Set();
+  const detailSel = new Set();
   let panelPartyId = null;
 
   function buildLaneToggles(container) {
@@ -169,6 +169,10 @@
       const lane = b.getAttribute("data-lane");
       b.classList.toggle("on", lane === "ALL" ? all : sel.has(lane));
     });
+  }
+  function setSel(sel, arr) {
+    sel.clear();
+    arr.forEach((x) => sel.add(x));
   }
   function wireLanePick(container, sel) {
     container.addEventListener("click", (e) => {
@@ -323,8 +327,7 @@
     // 참가 패널: 이 파티에 처음 들어왔을 때만 내 현재 선택으로 초기화(편집 중 덮어쓰기 방지)
     if (panelPartyId !== p.id) {
       panelPartyId = p.id;
-      detailSel = new Set(me ? me.positions : []);
-      wireLanePick($("d-lanes"), detailSel);
+      setSel(detailSel, me ? me.positions : []);
     }
     const full = p.count >= MAX && !me;
     $("d-lanes").hidden = !positional;
@@ -390,11 +393,11 @@
     const lane = dropEl.getAttribute("data-drop");
     if (lane === "aram") {
       socket.emit("party:leave", { partyId: p.id, clientId });
-      detailSel = new Set();
+      detailSel.clear();
       return;
     }
     const next = me.positions.filter((x) => x !== lane);
-    detailSel = new Set(next);
+    setSel(detailSel, next);
     if (next.length === 0) socket.emit("party:leave", { partyId: p.id, clientId });
     else socket.emit("party:join", { partyId: p.id, clientId, nickname: nick() || me.nickname, positions: next });
   });
@@ -416,7 +419,7 @@
     const p = state.parties.find((x) => x.id === view.partyId);
     if (p) {
       socket.emit("party:leave", { partyId: p.id, clientId });
-      detailSel = new Set();
+      detailSel.clear();
     }
   });
 
@@ -435,6 +438,14 @@
       return render();
     }
     socket.emit("party:settings", { partyId: view.partyId, clientId, scheduledAt: at });
+  });
+
+  // 시간 입력 달력 닫기(blur로 네이티브 픽커 닫음)
+  document.querySelectorAll("[data-close]").forEach((b) => {
+    b.addEventListener("click", () => {
+      const el = document.getElementById(b.getAttribute("data-close"));
+      if (el) el.blur();
+    });
   });
 
   // 목록: 파티 열기

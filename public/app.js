@@ -79,10 +79,12 @@
     const url = new URL(location.href);
     let r = url.searchParams.get("room");
     if (!r) {
-      r = shortCode();
+      // 맨 URL 접속이면 마지막에 쓰던 방으로 복귀(없으면 새 방 생성)
+      r = localStorage.getItem("lolmatch:room") || shortCode();
       url.searchParams.set("room", r);
       history.replaceState(null, "", url);
     }
+    localStorage.setItem("lolmatch:room", r);
     return r;
   }
   const room = currentRoom();

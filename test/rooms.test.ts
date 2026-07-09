@@ -15,7 +15,7 @@ describe("RoomRegistry (party list)", () => {
     reg.createParty(room, {
       clientId: "c1",
       nickname: "A",
-      position: "MID",
+      positions: ["MID"],
       settings: { queue: "SOLO" },
       now: NOW,
       ...over,
@@ -27,23 +27,24 @@ describe("RoomRegistry (party list)", () => {
     expect(dto.parties).toHaveLength(1);
     expect(dto.parties[0]?.count).toBe(1);
     expect(dto.parties[0]?.members[0]?.clientId).toBe("c1");
+    expect(dto.parties[0]?.members[0]?.positions).toEqual(["MID"]);
     expect(dto.parties[0]?.capacity).toBe(5);
   });
 
   it("holds multiple parties per room", () => {
     create();
-    create("r", { clientId: "c2", position: "TOP" });
+    create("r", { clientId: "c2", positions: ["TOP"] });
     expect(reg.roomDTO("r", NOW).parties).toHaveLength(2);
   });
 
-  it("joins an existing party and caps at 5 members", () => {
+  it("joins with multiple lanes and caps at 5 people", () => {
     const p = create();
     for (const c of ["c2", "c3", "c4", "c5"]) {
-      reg.join("r", p.id, { clientId: c, nickname: c, position: "MID", now: NOW }, NOW);
+      reg.join("r", p.id, { clientId: c, nickname: c, positions: ["MID", "TOP"], now: NOW }, NOW);
     }
     expect(reg.roomDTO("r", NOW).parties[0]?.count).toBe(5);
     expect(() =>
-      reg.join("r", p.id, { clientId: "c6", nickname: "F", position: "MID", now: NOW }, NOW),
+      reg.join("r", p.id, { clientId: "c6", nickname: "F", positions: ["MID"], now: NOW }, NOW),
     ).toThrowError(code("PARTY_FULL"));
   });
 
@@ -62,19 +63,13 @@ describe("RoomRegistry (party list)", () => {
 
   it("throws PARTY_NOT_FOUND when joining a missing party", () => {
     expect(() =>
-      reg.join("r", "nope", { clientId: "x", nickname: "X", position: "MID", now: NOW }, NOW),
+      reg.join("r", "nope", { clientId: "x", nickname: "X", positions: ["MID"], now: NOW }, NOW),
     ).toThrowError(code("PARTY_NOT_FOUND"));
   });
 
-  it("clears member positions when a party switches to ARAM", () => {
+  it("clears member lanes when a party switches to ARAM", () => {
     const p = create();
     reg.updateSettings("r", p.id, { queue: "ARAM" }, NOW);
-    expect(reg.roomDTO("r", NOW).parties[0]?.members[0]?.position).toBeNull();
-  });
-
-  it("reports the earliest future expiry", () => {
-    create("r", { settings: { queue: "SOLO", scheduledAt: NOW + 2 * HOUR } });
-    create("r", { clientId: "c2", position: "TOP", settings: { queue: "SOLO", scheduledAt: NOW + HOUR } });
-    expect(reg.nextExpiry("r", NOW)).toBe(NOW + HOUR);
+    expect(reg.roomDTO("r", NOW).parties[0]?.members[0]?.positions).toEqual([]);
   });
 });

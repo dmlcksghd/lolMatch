@@ -250,3 +250,41 @@ h1 .spark { color: var(--gold); }
   .create__grid { grid-template-columns: 1fr; }
   .lane { grid-template-columns: 3.6rem minmax(0, 1fr); gap: 0.45rem; }
 }
+
+/* 라인 다중 선택 토글 */
+.req { color: var(--danger); font-style: normal; font-size: 0.62rem; font-weight: 800; }
+.lane-pick { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.lane-pick[hidden] { display: none; }
+.lane-toggle {
+  font-family: inherit; font-size: 0.85rem; font-weight: 700; cursor: pointer; min-height: 2.2rem;
+  padding: 0.4rem 0.7rem; border-radius: 999px; color: var(--ink-soft);
+  background: color-mix(in oklab, var(--ground) 45%, transparent);
+  border: 1px solid color-mix(in oklab, var(--line) 60%, transparent);
+  transition: background var(--tap), border-color var(--tap), color var(--tap);
+}
+.lane-toggle:hover { border-color: var(--gold); }
+.lane-toggle:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in oklab, var(--gold) 30%, transparent); }
+.lane-toggle.on {
+  color: #1a1206; border-color: var(--gold-hi);
+  background: linear-gradient(180deg, color-mix(in oklab, var(--gold) 92%, white), var(--gold));
+}
+.lane-toggle--all { font-family: var(--mono); letter-spacing: 0.05em; }
+.lane-toggle--all.on {
+  color: #04201d; border-color: var(--teal);
+  background: linear-gradient(180deg, color-mix(in oklab, var(--teal-hi) 88%, white), var(--teal));
+}
+
+/* 참가 패널 */
+.join-panel {
+  display: flex; flex-direction: column; gap: 0.55rem; padding: 0.8rem; border-radius: 12px;
+  background: color-mix(in oklab, var(--gold) 8%, transparent);
+  border: 1px solid color-mix(in oklab, var(--gold) 30%, transparent);
+}
+.join-panel__label { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.04em; color: var(--muted); }
+.join-panel__label[hidden] { display: none; }
+.join-go { width: 100%; padding: 0.7rem; font-size: 0.95rem; }
+.join-go:disabled { opacity: 0.45; cursor: not-allowed; }
+.roster-title {
+  font-size: 0.72rem; font-weight: 800; letter-spacing: 0.08em; color: var(--muted);
+  text-transform: uppercase; margin-top: 0.2rem;
+}

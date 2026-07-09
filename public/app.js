@@ -1,4 +1,4 @@
-/* LOLMatch client — 파티 목록/상세, 실시간 저장, 반응형. */
+/* LOLMatch client — 파티 목록/상세, 라인 다중 선택 참가, 실시간 저장, 반응형. */
 (() => {
   "use strict";
 
@@ -58,17 +58,15 @@
     const t = new Date(v).getTime();
     return Number.isFinite(t) ? t : null;
   }
-  // 네이티브 시간 입력의 연도 범위를 지금~1년으로 제한(6자리 연도 방지)
   function setTimeBounds(input) {
     const base = Date.now();
     input.min = toLocalInput(base);
     input.max = toLocalInput(base + YEAR_MS);
   }
-  // 선택 시각 검증: 비면 null(시간 미정), 위반이면 false, 유효하면 ms
+  // 비면 null, 위반이면 false, 유효하면 ms
   function readTimeFrom(input) {
     const raw = input.value;
     if (!raw) return null;
-    // 네이티브 min/max 위반(예: 6자리 연도) 차단
     if (typeof input.checkValidity === "function" && !input.checkValidity()) {
       toast("시간이 올바르지 않아요 (지금~1년 이내)");
       return false;
@@ -130,6 +128,7 @@
   const deadlineEl = $("deadline");
   const leaveBtn = $("leave");
   const toastEl = $("toast");
+  const joinPanel = $("join-panel");
 
   nickInput.value = localStorage.getItem("lolmatch:nick") || "";
   nickInput.addEventListener("input", () => localStorage.setItem("lolmatch:nick", nickInput.value.trim()));
@@ -141,16 +140,12 @@
     return false;
   }
 
-  // 셀렉트 옵션 채우기
+  // 셀렉트 옵션
   function fillSelect(el, pairs) {
     el.innerHTML = pairs.map(([v, l]) => `<option value="${v}">${l}</option>`).join("");
   }
-  function fillPos(el) {
-    el.innerHTML = LANES.map((l) => `<option value="${l.key}">${l.label}</option>`).join("");
-  }
   fillSelect($("c-queue"), QUEUES);
   fillSelect($("c-tier"), TIERS);
-  fillPos($("c-pos"));
   fillSelect($("d-queue"), QUEUES);
   fillSelect($("d-tier"), TIERS);
   $("c-queue").value = "SOLO";
@@ -158,10 +153,48 @@
   setTimeBounds($("c-time"));
   setTimeBounds($("d-time"));
 
+  // 라인 다중 선택 토글
+  const createSel = new Set();
+  let detailSel = new Set();
+  let panelPartyId = null;
+
+  function buildLaneToggles(container) {
+    container.innerHTML =
+      LANES.map((l) => `<button type="button" class="lane-toggle" data-lane="${l.key}">${l.label}</button>`).join("") +
+      `<button type="button" class="lane-toggle lane-toggle--all" data-lane="ALL">ALL</button>`;
+  }
+  function paintLaneToggles(container, sel) {
+    const all = LANES.every((l) => sel.has(l.key));
+    container.querySelectorAll("[data-lane]").forEach((b) => {
+      const lane = b.getAttribute("data-lane");
+      b.classList.toggle("on", lane === "ALL" ? all : sel.has(lane));
+    });
+  }
+  function wireLanePick(container, sel) {
+    container.addEventListener("click", (e) => {
+      const b = e.target.closest("[data-lane]");
+      if (!b) return;
+      const lane = b.getAttribute("data-lane");
+      if (lane === "ALL") {
+        if (LANES.every((l) => sel.has(l.key))) sel.clear();
+        else LANES.forEach((l) => sel.add(l.key));
+      } else if (sel.has(lane)) {
+        sel.delete(lane);
+      } else {
+        sel.add(lane);
+      }
+      paintLaneToggles(container, sel);
+    });
+  }
+  buildLaneToggles($("c-lanes"));
+  buildLaneToggles($("d-lanes"));
+  wireLanePick($("c-lanes"), createSel);
+  wireLanePick($("d-lanes"), detailSel);
+
   // 상태 & 뷰
   let state = { parties: [] };
   let view = { name: "list" };
-  let pendingEnter = false; // 새로 만든 파티로 자동 진입
+  let pendingEnter = false;
   history.replaceState({ name: "list" }, "");
 
   function enterParty(id) {
@@ -171,6 +204,7 @@
   }
   window.addEventListener("popstate", (e) => {
     view = e.state && e.state.name === "detail" ? { name: "detail", partyId: e.state.partyId } : { name: "list" };
+    if (view.name !== "detail") panelPartyId = null;
     render();
   });
   $("back").addEventListener("click", () => history.back());
@@ -209,8 +243,8 @@
       PARTY_FULL: "파티가 가득 찼어요 (최대 5명)",
       PARTY_NOT_FOUND: "파티를 찾을 수 없어요",
       INVALID_NICKNAME: "닉네임은 1~16자여야 해요",
-      INVALID_POSITION: "포지션을 선택하세요",
-      INVALID_TIME: "미래 시각을 선택하세요",
+      INVALID_POSITION: "라인을 하나 이상 선택하세요",
+      INVALID_TIME: "시간이 올바르지 않아요",
       INVALID_TIER: "티어 값이 올바르지 않아요",
       INVALID_QUEUE: "큐 값이 올바르지 않아요",
       NO_CLIENT: "브라우저 정보를 읽지 못했어요",
@@ -219,12 +253,15 @@
     return (e && map[e.code]) || (e && e.message) || "요청을 처리하지 못했어요";
   }
 
+  const myMember = (p) => p.members.find((m) => m.clientId === clientId) || null;
+
   // 렌더
   function render() {
     $("roomcode").textContent = room;
     const parties = state.parties || [];
     if (view.name === "detail" && !parties.some((p) => p.id === view.partyId)) {
       view = { name: "list" };
+      panelPartyId = null;
       history.replaceState(view, "");
       toast("파티가 종료되었어요");
     }
@@ -237,7 +274,7 @@
   function memberPreview(p) {
     if (!p.members.length) return "비어 있음";
     return p.members
-      .map((m) => (m.position ? `${laneLabel(m.position)} ${esc(m.nickname)}` : esc(m.nickname)))
+      .map((m) => (m.positions.length ? `${m.positions.map(laneLabel).join("/")} ${esc(m.nickname)}` : esc(m.nickname)))
       .join(" · ");
   }
 
@@ -266,12 +303,15 @@
 
   function renderDetail(p) {
     if (!p) return;
+    const positional = usesPositions(p.settings.queue);
+    const me = myMember(p);
+
     $("detail-meta").innerHTML = `<b>${queueLabel(p.settings.queue)}</b> · ${tierLabel(p.settings.tier)}`;
-    // 설정 컨트롤 반영(포커스 중이 아닐 때만)
     setIfIdle($("d-queue"), p.settings.queue);
     setIfIdle($("d-tier"), p.settings.tier);
     setTimeBounds($("d-time"));
-    if (document.activeElement !== $("d-time")) $("d-time").value = p.settings.scheduledAt ? toLocalInput(p.settings.scheduledAt) : "";
+    if (document.activeElement !== $("d-time"))
+      $("d-time").value = p.settings.scheduledAt ? toLocalInput(p.settings.scheduledAt) : "";
 
     if (p.settings.scheduledAt) {
       deadlineEl.hidden = false;
@@ -280,83 +320,104 @@
       deadlineEl.hidden = true;
     }
 
-    const iAmIn = p.members.some((m) => m.clientId === clientId);
-    const full = p.count >= MAX;
-    rosterEl.innerHTML = usesPositions(p.settings.queue) ? laneRoster(p, iAmIn, full) : aramRoster(p, iAmIn, full);
+    // 참가 패널: 이 파티에 처음 들어왔을 때만 내 현재 선택으로 초기화(편집 중 덮어쓰기 방지)
+    if (panelPartyId !== p.id) {
+      panelPartyId = p.id;
+      detailSel = new Set(me ? me.positions : []);
+      wireLanePick($("d-lanes"), detailSel);
+    }
+    const full = p.count >= MAX && !me;
+    $("d-lanes").hidden = !positional;
+    $("join-label").hidden = !positional;
+    paintLaneToggles($("d-lanes"), detailSel);
+    const goBtn = $("join-go");
+    if (positional) {
+      goBtn.textContent = me ? "내 라인 저장" : "참가하기";
+      goBtn.disabled = full;
+    } else {
+      goBtn.textContent = me ? "참가 완료" : "참가하기";
+      goBtn.disabled = full || Boolean(me);
+    }
+    joinPanel.dataset.full = full ? "1" : "0";
+
+    rosterEl.innerHTML = positional ? laneRoster(p) : aramRoster(p);
     $("detail-filled").textContent = String(p.count);
-    leaveBtn.hidden = !iAmIn;
+    leaveBtn.hidden = !me;
   }
 
-  function chip(m) {
-    const mine = m.clientId === clientId;
-    return mine
-      ? `<button class="chip chip--mine" data-leave="1" type="button" title="나가기">${esc(m.nickname)} ✕</button>`
-      : `<span class="chip">${esc(m.nickname)}</span>`;
-  }
-
-  function laneRoster(p, iAmIn, full) {
-    const rows = LANES.map((l) => {
-      const here = p.members.filter((m) => m.position === l.key);
-      const canJoin = !full || iAmIn; // 이미 참가자면 자리 이동 허용
+  function laneRoster(p) {
+    return LANES.map((l) => {
+      const here = p.members.filter((m) => m.positions.includes(l.key));
+      const seats = here.length
+        ? here.map((m) => chip(m, l.key)).join("")
+        : '<span class="chip chip--ghost">비어 있음</span>';
       return `
       <div class="lane">
         <div class="lane__id"><span>${l.label}</span></div>
-        <div class="lane__seats">
-          ${here.map(chip).join("")}
-          <button class="seat-add" data-join="${l.key}" type="button" ${canJoin ? "" : "disabled"}>+ 참가</button>
-        </div>
+        <div class="lane__seats">${seats}</div>
       </div>`;
-    });
-    const stray = p.members.filter((m) => !m.position);
-    if (stray.length) {
-      rows.push(`
-      <div class="lane lane--stray">
-        <div class="lane__id"><span>미지정</span></div>
-        <div class="lane__seats">${stray.map(chip).join("")}</div>
-      </div>`);
-    }
-    return rows.join("");
+    }).join("");
   }
 
-  function aramRoster(p, iAmIn, full) {
-    const seats = p.members.map(chip).join("");
-    const canJoin = !full && !iAmIn;
-    return `
-      <div class="aram">
-        <div class="aram__seats">${seats || '<span class="chip chip--ghost">아직 아무도 없어요</span>'}</div>
-        ${
-          iAmIn
-            ? ""
-            : `<button class="btn btn--primary aram__join" data-join="ARAM" type="button" ${canJoin ? "" : "disabled"}>참가하기</button>`
-        }
-      </div>`;
+  function aramRoster(p) {
+    const seats = p.members
+      .map((m) => (m.clientId === clientId ? myChip(m.nickname, "aram") : `<span class="chip">${esc(m.nickname)}</span>`))
+      .join("");
+    return `<div class="aram"><div class="aram__seats">${seats || '<span class="chip chip--ghost">아직 아무도 없어요</span>'}</div></div>`;
+  }
+
+  function chip(m, lane) {
+    return m.clientId === clientId
+      ? myChip(m.nickname, lane)
+      : `<span class="chip">${esc(m.nickname)}</span>`;
+  }
+  function myChip(nickname, lane) {
+    return `<button class="chip chip--mine" data-drop="${lane}" type="button" title="이 라인에서 빼기">${esc(nickname)} ✕</button>`;
   }
 
   function setIfIdle(sel, value) {
     if (document.activeElement !== sel) sel.value = value;
   }
 
-  // 상세 상호작용(위임)
+  // 상세 상호작용
   rosterEl.addEventListener("click", (e) => {
     const p = state.parties.find((x) => x.id === view.partyId);
     if (!p) return;
-    const leaveEl = e.target.closest("[data-leave]");
-    if (leaveEl) {
+    const dropEl = e.target.closest("[data-drop]");
+    if (!dropEl) return;
+    const me = myMember(p);
+    if (!me) return;
+    const lane = dropEl.getAttribute("data-drop");
+    if (lane === "aram") {
       socket.emit("party:leave", { partyId: p.id, clientId });
+      detailSel = new Set();
       return;
     }
-    const joinEl = e.target.closest("[data-join]");
-    if (joinEl) {
-      if (!requireNick()) return;
-      const pos = joinEl.getAttribute("data-join");
-      const payload = { partyId: p.id, clientId, nickname: nick() };
-      if (usesPositions(p.settings.queue)) payload.position = pos;
-      socket.emit("party:join", payload);
-    }
+    const next = me.positions.filter((x) => x !== lane);
+    detailSel = new Set(next);
+    if (next.length === 0) socket.emit("party:leave", { partyId: p.id, clientId });
+    else socket.emit("party:join", { partyId: p.id, clientId, nickname: nick() || me.nickname, positions: next });
   });
+
+  $("join-go").addEventListener("click", () => {
+    const p = state.parties.find((x) => x.id === view.partyId);
+    if (!p || !requireNick()) return;
+    const payload = { partyId: p.id, clientId, nickname: nick() };
+    if (usesPositions(p.settings.queue)) {
+      if (detailSel.size === 0) return toast("갈 라인을 선택하세요");
+      payload.positions = [...detailSel];
+    } else {
+      payload.positions = [];
+    }
+    socket.emit("party:join", payload);
+  });
+
   leaveBtn.addEventListener("click", () => {
     const p = state.parties.find((x) => x.id === view.partyId);
-    if (p) socket.emit("party:leave", { partyId: p.id, clientId });
+    if (p) {
+      socket.emit("party:leave", { partyId: p.id, clientId });
+      detailSel = new Set();
+    }
   });
 
   // 상세 설정 변경
@@ -368,16 +429,21 @@
   );
   $("d-time").addEventListener("change", (e) => {
     const at = readTimeFrom(e.target);
-    if (at === false) return;
+    if (at === false) return render();
+    if (at === null) {
+      toast("시간은 비울 수 없어요");
+      return render();
+    }
     socket.emit("party:settings", { partyId: view.partyId, clientId, scheduledAt: at });
   });
 
-  // 목록: 파티 열기 + 새 파티 폼
+  // 목록: 파티 열기
   partyList.addEventListener("click", (e) => {
     const openEl = e.target.closest("[data-open]");
     if (openEl) enterParty(openEl.getAttribute("data-open"));
   });
 
+  // 새 파티 폼
   const createForm = $("create-form");
   const cQueue = $("c-queue");
   const cPosField = $("c-pos-field");
@@ -391,6 +457,8 @@
     createForm.hidden = !createForm.hidden;
     if (!createForm.hidden) {
       setTimeBounds($("c-time"));
+      createSel.clear();
+      paintLaneToggles($("c-lanes"), createSel);
       $("c-queue").focus();
     }
   });
@@ -401,8 +469,14 @@
     const queue = cQueue.value;
     const at = readTimeFrom($("c-time"));
     if (at === false) return;
+    if (at === null) return toast("시간을 입력하세요");
     const payload = { clientId, nickname: nick(), queue, tier: $("c-tier").value, scheduledAt: at };
-    if (usesPositions(queue)) payload.position = $("c-pos").value;
+    if (usesPositions(queue)) {
+      if (createSel.size === 0) return toast("갈 라인을 하나 이상 선택하세요");
+      payload.positions = [...createSel];
+    } else {
+      payload.positions = [];
+    }
     pendingEnter = true;
     socket.emit("party:create", payload);
     createForm.hidden = true;

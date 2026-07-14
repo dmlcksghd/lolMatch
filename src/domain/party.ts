@@ -33,6 +33,8 @@ export interface Party {
   settings: PartySettings;
   members: Member[];
   createdAt: number;
+  /** 방장(만든 사람) 신원. 설정 편집 권한을 이 값으로 제한한다. */
+  ownerId: string;
 }
 
 export interface SettingsPatch {
@@ -105,17 +107,26 @@ function resolveSettings(patch: SettingsPatch, base: PartySettings, now: number)
   return settings;
 }
 
-export function createParty(id: string, patch: SettingsPatch, now: number): Party {
-  return { id, settings: resolveSettings(patch, DEFAULT_SETTINGS, now), members: [], createdAt: now };
+export function createParty(id: string, patch: SettingsPatch, now: number, ownerId: string): Party {
+  return { id, settings: resolveSettings(patch, DEFAULT_SETTINGS, now), members: [], createdAt: now, ownerId };
+}
+
+/** 남은 멤버 중 가장 먼저 들어온 사람(= members[0], 가입 순서 유지)에게 방장을 넘긴다. */
+function reassignOwner(members: Member[], currentOwnerId: string): string {
+  if (members.some((m) => m.clientId === currentOwnerId)) return currentOwnerId;
+  return members[0]?.clientId ?? currentOwnerId;
 }
 
 export function updateSettings(party: Party, patch: SettingsPatch, now: number): Party {
   const settings = resolveSettings(patch, party.settings, now);
   // 포지션이 없는 큐(칼바람)로 바꾸면 기존 멤버의 라인 선택을 모두 비운다.
+  // 반대로 포지션 있는 큐로 바꾸면, 라인이 없는 멤버(칼바람에서 넘어온 사람)는 보이지 않는
+  // 유령 인원으로 정원만 차지하게 되므로 파티에서 내보낸다(다시 라인 선택 후 참가해야 함).
   const members = usesPositions(settings.queue)
-    ? party.members
+    ? party.members.filter((m) => m.positions.length > 0)
     : party.members.map((m) => (m.positions.length ? { ...m, positions: [] } : m));
-  return { ...party, settings, members };
+  const ownerId = reassignOwner(members, party.ownerId);
+  return { ...party, settings, members, ownerId };
 }
 
 export function joinParty(party: Party, input: JoinInput): Party {
@@ -137,7 +148,9 @@ export function joinParty(party: Party, input: JoinInput): Party {
 }
 
 export function leaveParty(party: Party, clientId: string): Party {
-  return { ...party, members: party.members.filter((m) => m.clientId !== clientId) };
+  const members = party.members.filter((m) => m.clientId !== clientId);
+  const ownerId = reassignOwner(members, party.ownerId);
+  return { ...party, members, ownerId };
 }
 
 export function memberCount(party: Party): number {

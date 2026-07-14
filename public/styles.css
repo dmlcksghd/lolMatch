@@ -154,7 +154,9 @@ h1 .spark { color: var(--gold); }
 .detail-meta { font-size: 0.9rem; color: var(--ink-soft); }
 .detail-meta b { color: var(--ink); }
 .settings { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0.5rem; }
+.settings select:disabled, .settings input:disabled { opacity: 0.5; cursor: not-allowed; }
 .field--wide { grid-column: 1 / -1; }
+.settings-hint { margin: 0; padding: 0 0.4rem; font-size: 0.76rem; line-height: 1.6; color: var(--muted); text-align: center; }
 .deadline { margin: 0; font-size: 0.76rem; font-weight: 700; color: var(--gold); font-variant-numeric: tabular-nums; }
 .roster { display: flex; flex-direction: column; gap: 0.5rem; }
 

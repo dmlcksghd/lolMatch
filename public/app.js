@@ -87,16 +87,13 @@
     return at;
   }
 
-  // 클라이언트 신원 & 닉네임(로컬 저장)
-  function getClientId() {
-    let id = localStorage.getItem("lolmatch:cid");
-    if (!id) {
-      id = crypto.randomUUID ? crypto.randomUUID() : "c-" + Math.random().toString(36).slice(2) + Date.now();
-      localStorage.setItem("lolmatch:cid", id);
-    }
-    return id;
-  }
-  const clientId = getClientId();
+  // 세션 토큰(브라우저 로컬 저장) — 신원은 서버가 서명해 발급한다. 클라이언트는 값을 그대로
+  // 저장했다 재접속 때 제시할 뿐, 신원 자체를 자칭할 수 없다(위조 방지는 서버 HMAC 검증).
+  const SESSION_KEY = "lolmatch:session";
+  const getSessionToken = () => localStorage.getItem(SESSION_KEY) || undefined;
+  const saveSessionToken = (token) => {
+    if (token) localStorage.setItem(SESSION_KEY, token);
+  };
 
   function shortCode() {
     const abc = "abcdefghijkmnpqrstuvwxyz23456789";
@@ -129,6 +126,11 @@
   const leaveBtn = $("leave");
   const toastEl = $("toast");
   const joinPanel = $("join-panel");
+  const settingsEl = $("detail-settings");
+  const settingsHint = $("settings-hint");
+  const dQueue = $("d-queue");
+  const dTier = $("d-tier");
+  const dTime = $("d-time");
 
   nickInput.value = localStorage.getItem("lolmatch:nick") || "";
   nickInput.addEventListener("input", () => localStorage.setItem("lolmatch:nick", nickInput.value.trim()));
@@ -146,12 +148,12 @@
   }
   fillSelect($("c-queue"), QUEUES);
   fillSelect($("c-tier"), TIERS);
-  fillSelect($("d-queue"), QUEUES);
-  fillSelect($("d-tier"), TIERS);
+  fillSelect(dQueue, QUEUES);
+  fillSelect(dTier, TIERS);
   $("c-queue").value = "SOLO";
   $("c-tier").value = "ANY";
   setTimeBounds($("c-time"));
-  setTimeBounds($("d-time"));
+  setTimeBounds(dTime);
 
   // 라인 다중 선택 토글
   const createSel = new Set();
@@ -213,8 +215,8 @@
   });
   $("back").addEventListener("click", () => history.back());
 
-  // 소켓
-  const socket = io();
+  // 소켓 — auth는 콜백 형태로 줘서 재접속마다 최신 저장 토큰을 다시 읽어 보낸다.
+  const socket = io({ auth: (cb) => cb({ token: getSessionToken() }) });
   const conn = $("conn");
   socket.on("connect", () => {
     conn.textContent = "실시간";
@@ -225,10 +227,11 @@
     conn.textContent = "연결 끊김";
     conn.dataset.on = "0";
   });
+  socket.on("session:token", (payload) => saveSessionToken(payload && payload.token));
   socket.on("room:state", (dto) => {
     state = dto || { parties: [] };
     if (pendingEnter) {
-      const mine = [...state.parties].reverse().find((p) => p.members.some((m) => m.clientId === clientId));
+      const mine = [...state.parties].reverse().find((p) => p.members.some((m) => m.mine));
       if (mine) {
         pendingEnter = false;
         enterParty(mine.id);
@@ -251,13 +254,15 @@
       INVALID_TIME: "시간이 올바르지 않아요",
       INVALID_TIER: "티어 값이 올바르지 않아요",
       INVALID_QUEUE: "큐 값이 올바르지 않아요",
+      NOT_OWNER: "방장만 설정을 바꿀 수 있어요",
+      RATE_LIMITED: "요청이 너무 많아요. 잠시 후 다시 시도하세요",
       NO_CLIENT: "브라우저 정보를 읽지 못했어요",
       NO_ROOM: "방 정보가 없어요",
     };
     return (e && map[e.code]) || (e && e.message) || "요청을 처리하지 못했어요";
   }
 
-  const myMember = (p) => p.members.find((m) => m.clientId === clientId) || null;
+  const myMember = (p) => p.members.find((m) => m.mine) || null;
 
   // 렌더
   function render() {
@@ -311,11 +316,17 @@
     const me = myMember(p);
 
     $("detail-meta").innerHTML = `<b>${queueLabel(p.settings.queue)}</b> · ${tierLabel(p.settings.tier)}`;
-    setIfIdle($("d-queue"), p.settings.queue);
-    setIfIdle($("d-tier"), p.settings.tier);
-    setTimeBounds($("d-time"));
-    if (document.activeElement !== $("d-time"))
-      $("d-time").value = p.settings.scheduledAt ? toLocalInput(p.settings.scheduledAt) : "";
+    setIfIdle(dQueue, p.settings.queue);
+    setIfIdle(dTier, p.settings.tier);
+    setTimeBounds(dTime);
+    if (document.activeElement !== dTime) dTime.value = p.settings.scheduledAt ? toLocalInput(p.settings.scheduledAt) : "";
+
+    // 설정 편집은 방장만: 방장이 아니면 입력을 잠그고 안내 문구를 보여준다.
+    settingsEl.dataset.owner = p.isOwner ? "1" : "0";
+    dQueue.disabled = !p.isOwner;
+    dTier.disabled = !p.isOwner;
+    dTime.disabled = !p.isOwner;
+    settingsHint.hidden = p.isOwner;
 
     if (p.settings.scheduledAt) {
       deadlineEl.hidden = false;
@@ -364,15 +375,13 @@
 
   function aramRoster(p) {
     const seats = p.members
-      .map((m) => (m.clientId === clientId ? myChip(m.nickname, "aram") : `<span class="chip">${esc(m.nickname)}</span>`))
+      .map((m) => (m.mine ? myChip(m.nickname, "aram") : `<span class="chip">${esc(m.nickname)}</span>`))
       .join("");
     return `<div class="aram"><div class="aram__seats">${seats || '<span class="chip chip--ghost">아직 아무도 없어요</span>'}</div></div>`;
   }
 
   function chip(m, lane) {
-    return m.clientId === clientId
-      ? myChip(m.nickname, lane)
-      : `<span class="chip">${esc(m.nickname)}</span>`;
+    return m.mine ? myChip(m.nickname, lane) : `<span class="chip">${esc(m.nickname)}</span>`;
   }
   function myChip(nickname, lane) {
     return `<button class="chip chip--mine" data-drop="${lane}" type="button" title="이 라인에서 빼기">${esc(nickname)} ✕</button>`;
@@ -392,20 +401,20 @@
     if (!me) return;
     const lane = dropEl.getAttribute("data-drop");
     if (lane === "aram") {
-      socket.emit("party:leave", { partyId: p.id, clientId });
+      socket.emit("party:leave", { partyId: p.id });
       detailSel.clear();
       return;
     }
     const next = me.positions.filter((x) => x !== lane);
     setSel(detailSel, next);
-    if (next.length === 0) socket.emit("party:leave", { partyId: p.id, clientId });
-    else socket.emit("party:join", { partyId: p.id, clientId, nickname: nick() || me.nickname, positions: next });
+    if (next.length === 0) socket.emit("party:leave", { partyId: p.id });
+    else socket.emit("party:join", { partyId: p.id, nickname: nick() || me.nickname, positions: next });
   });
 
   $("join-go").addEventListener("click", () => {
     const p = state.parties.find((x) => x.id === view.partyId);
     if (!p || !requireNick()) return;
-    const payload = { partyId: p.id, clientId, nickname: nick() };
+    const payload = { partyId: p.id, nickname: nick() };
     if (usesPositions(p.settings.queue)) {
       if (detailSel.size === 0) return toast("갈 라인을 선택하세요");
       payload.positions = [...detailSel];
@@ -418,26 +427,22 @@
   leaveBtn.addEventListener("click", () => {
     const p = state.parties.find((x) => x.id === view.partyId);
     if (p) {
-      socket.emit("party:leave", { partyId: p.id, clientId });
+      socket.emit("party:leave", { partyId: p.id });
       detailSel.clear();
     }
   });
 
-  // 상세 설정 변경
-  $("d-queue").addEventListener("change", (e) =>
-    socket.emit("party:settings", { partyId: view.partyId, clientId, queue: e.target.value }),
-  );
-  $("d-tier").addEventListener("change", (e) =>
-    socket.emit("party:settings", { partyId: view.partyId, clientId, tier: e.target.value }),
-  );
-  $("d-time").addEventListener("change", (e) => {
+  // 상세 설정 변경(방장만 — 입력 자체가 잠겨 있지만 서버도 다시 검증함)
+  dQueue.addEventListener("change", (e) => socket.emit("party:settings", { partyId: view.partyId, queue: e.target.value }));
+  dTier.addEventListener("change", (e) => socket.emit("party:settings", { partyId: view.partyId, tier: e.target.value }));
+  dTime.addEventListener("change", (e) => {
     const at = readTimeFrom(e.target);
     if (at === false) return render();
     if (at === null) {
       toast("시간은 비울 수 없어요");
       return render();
     }
-    socket.emit("party:settings", { partyId: view.partyId, clientId, scheduledAt: at });
+    socket.emit("party:settings", { partyId: view.partyId, scheduledAt: at });
   });
 
   // 시간 입력 달력 닫기(blur로 네이티브 픽커 닫음)
@@ -481,7 +486,7 @@
     const at = readTimeFrom($("c-time"));
     if (at === false) return;
     if (at === null) return toast("시간을 입력하세요");
-    const payload = { clientId, nickname: nick(), queue, tier: $("c-tier").value, scheduledAt: at };
+    const payload = { nickname: nick(), queue, tier: $("c-tier").value, scheduledAt: at };
     if (usesPositions(queue)) {
       if (createSel.size === 0) return toast("갈 라인을 하나 이상 선택하세요");
       payload.positions = [...createSel];

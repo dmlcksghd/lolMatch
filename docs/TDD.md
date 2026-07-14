@@ -16,9 +16,14 @@ RED  →  GREEN  →  코드리뷰  →  수정  →  코드리뷰  →  커밋 
 
 | 파일 | 대상 | 성격 |
 |------|------|------|
-| `test/roster.test.ts` | 도메인 규칙(차지/해제/이동/검증/불변성) | 순수 단위 |
-| `test/rooms.test.ts` | 방 레지스트리(격리·오류 전파·DTO) | 단위 |
-| `test/socket.test.ts` | 실서버를 띄운 **실시간 통합** — 브로드캐스트/룸 격리/연결 종료 | 통합 |
+| `test/party.test.ts` | 도메인 규칙(파티 생성/참가/나가기/설정/방장/불변성) | 순수 단위 |
+| `test/rooms.test.ts` | 방 레지스트리(격리·오류 전파·DTO·방장 강제·용량 한도) | 단위 |
+| `test/session.test.ts` | 세션 토큰 발급/검증(위조·만료·형식 오류) | 순수 단위 |
+| `test/rate-limit.test.ts` | 소켓당 레이트 리밋(고정 윈도) | 순수 단위 |
+| `test/origin.test.ts` | Origin 화이트리스트 매칭 로직 | 순수 단위 |
+| `test/http.test.ts` | HTTP 서버(헬스체크·보안 헤더·정적 서빙) | 통합 |
+| `test/origin-allowlist.test.ts` | 실서버 핸드셰이크에서 Origin 차단(WS·polling) | 통합 |
+| `test/socket.test.ts` | 실서버를 띄운 **실시간 통합** — 브로드캐스트/룸 격리/임퍼스네이션·방장 방어/레이트리밋 | 통합 |
 
 ## 실행
 

@@ -12,3 +12,10 @@ services:
     envVars:
       - key: NODE_VERSION
         value: "20"
+      # Render 프록시를 거치면 내부 Host와 브라우저 Origin이 달라질 수 있다.
+      # 공개 주소를 명시해 Socket.IO의 polling/WebSocket 핸드셰이크가 안정적으로 통과하게 한다.
+      - key: ALLOWED_ORIGINS
+        value: "https://lolmatch.onrender.com"
+      # 재배포 뒤에도 브라우저 세션 서명을 유지하도록 Render가 한 번 생성한 값을 보관한다.
+      - key: SESSION_SECRET
+        generateValue: true

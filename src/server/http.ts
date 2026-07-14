@@ -54,7 +54,10 @@ export function createAppServer(options: GatewayOptions = {}): AppServer {
     maxHttpBufferSize: 10_000,
     ...(allowlist ? { cors: { origin: allowlist } } : {}),
     allowRequest: (req, callback) => {
-      const ok = isOriginAllowed(req.headers.origin, allowlist, req.headers.host);
+      const ok = isOriginAllowed(req.headers.origin, allowlist, req.headers.host, {
+        referer: req.headers.referer,
+        secFetchSite: req.headers["sec-fetch-site"],
+      });
       callback(ok ? null : "origin not allowed", ok);
     },
   });

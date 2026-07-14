@@ -21,7 +21,7 @@
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # 전체 테스트(unit + realtime 통합, 106개)
+npm test           # 전체 테스트(unit + realtime 통합, 110개)
 npm run test:cov   # 커버리지(임계 80%, CI에서 강제)
 npm run typecheck
 ```

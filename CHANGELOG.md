@@ -14,17 +14,15 @@
 - **Socket.IO 룸 누수 차단**: 소켓이 다른 방으로 갈아탈 때 이전 룸에서 명시적으로 `leave()`한다.
 - **소켓당 레이트 리밋**(고정 윈도, 기본 20회/10초, `RATE_LIMIT_MAX`/`RATE_LIMIT_WINDOW_MS`)과
   **Origin 화이트리스트**(`allowRequest`로 polling·WebSocket 모두 커버, `ALLOWED_ORIGINS`
-  미설정 시 안전한 기본값인 same-Host만 허용, **Origin 헤더가 없는 요청은 항상 거부** — 실제
-  브라우저는 두 전송 모두에 Origin을 반드시 실으므로 우회 수단이 되지 않는다)를 추가.
+  미설정 시 안전한 기본값인 same-Host만 허용)를 추가.
 - **[리뷰 발견/수정] SESSION_SECRET 빈 문자열 처리**: `.env.example`이 안내하는 대로
   `SESSION_SECRET=`을 빈 값으로 두면 `??` 연산자 특성상 "미설정"이 아니라 빈 문자열 그 자체가
   HMAC 시크릿으로 쓰여, 위조 가능한 예측 가능한 키가 되는 문제가 있었다. `||`로 교체해 빈
   문자열도 미설정과 동일하게 취급하도록 수정, 위조 회귀 테스트로 검증.
-- **[리뷰 발견/수정] Origin 부재 우회 구멍**: 최초 구현은 Origin 헤더가 없는 요청을 무조건
-  허용해, `ALLOWED_ORIGINS`를 설정해도 Origin만 생략하면 화이트리스트를 통째로 우회할 수
-  있었다. 비브라우저 클라이언트를 위한 예외를 별도로 두지 않고 Origin 부재를 항상 거부하도록
-  수정(정말 필요하면 그 클라이언트가 Origin을 직접 보내 화이트리스트에 등록하는 편이 항상 더
-  안전하다는 판단, YAGNI). polling·WebSocket 두 전송 모두에 대한 회귀 테스트 추가.
+- **[리뷰 발견/수정] Origin 부재 처리**: 최초 구현의 Origin 생략 우회를 막되, 동일 출처
+  polling GET에서는 브라우저가 Origin을 보내지 않는 실제 동작을 반영했다. Origin이 없을 때는
+  `Sec-Fetch-Site: same-origin`과 동일 Host Referer가 모두 확인되는 요청만 허용하고, 그 외는
+  거부한다. polling·WebSocket 회귀 테스트를 추가했다.
 ### 수정
 - **칼바람 → 라인 큐 전환 버그**: 라인을 고른 적 없는 멤버가 라인 있는 큐로 전환된 뒤에도
   정원만 차지하고 어떤 라인에도 안 보이던 문제. 전환 시 라인 없는 멤버를 파티에서 제거한다.
@@ -32,7 +30,7 @@
 - CI가 `npm run test:cov`(라인/함수/브랜치/구문 80% 임계, `vitest.config.ts`)와
   `npm audit --omit=dev --audit-level=high`를 강제하도록 `.github/workflows/ci.yml` 변경.
 ### 검증
-- 도메인/서버/통합 테스트 **106개** 통과, `tsc` clean, 전체 커버리지 라인 98%·브랜치 92%·
+- 도메인/서버/통합 테스트 **110개** 통과, `tsc` clean, 전체 커버리지 라인 98%·브랜치 92%·
   함수 97%·구문 98%(모두 80% 임계 상회), `npm audit --omit=dev` 0건.
 
 ## v0.4.1 — 라인 재선택 버그 수정 + 문구/크레딧

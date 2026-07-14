@@ -24,11 +24,40 @@ describe("parseAllowedOrigins", () => {
 });
 
 describe("isOriginAllowed", () => {
-  it("always denies requests with no Origin header — omission must not bypass the policy", () => {
+  it("denies requests with no Origin header or same-origin browser evidence", () => {
     expect(isOriginAllowed(undefined, ["https://a.example"], "a.example")).toBe(false);
     expect(isOriginAllowed(undefined, null, "a.example")).toBe(false);
     expect(isOriginAllowed(undefined, null, undefined)).toBe(false);
     expect(isOriginAllowed("", ["https://a.example"], "a.example")).toBe(false);
+  });
+
+  it("allows an Origin-less same-origin browser polling GET when fetch metadata and Referer agree", () => {
+    expect(
+      isOriginAllowed(undefined, ["https://other.example"], "app.example", {
+        referer: "https://app.example/room?id=1",
+        secFetchSite: "same-origin",
+      }),
+    ).toBe(true);
+  });
+
+  it("denies Origin-less requests when same-origin browser evidence is incomplete or inconsistent", () => {
+    expect(
+      isOriginAllowed(undefined, null, "app.example", {
+        referer: "https://evil.example/",
+        secFetchSite: "same-origin",
+      }),
+    ).toBe(false);
+    expect(
+      isOriginAllowed(undefined, null, "app.example", {
+        referer: "https://app.example/",
+        secFetchSite: "cross-site",
+      }),
+    ).toBe(false);
+    expect(
+      isOriginAllowed(undefined, null, "app.example", {
+        secFetchSite: "same-origin",
+      }),
+    ).toBe(false);
   });
 
   it("with an explicit allowlist, allows only exact origin matches", () => {

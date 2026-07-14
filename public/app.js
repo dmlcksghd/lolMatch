@@ -227,6 +227,11 @@
     conn.textContent = "연결 끊김";
     conn.dataset.on = "0";
   });
+  socket.on("connect_error", () => {
+    conn.textContent = "연결 실패";
+    conn.dataset.on = "0";
+    toast("실시간 서버에 연결하지 못했어요. 잠시 후 다시 시도하세요");
+  });
   socket.on("session:token", (payload) => saveSessionToken(payload && payload.token));
   socket.on("room:state", (dto) => {
     state = dto || { parties: [] };

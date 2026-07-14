@@ -38,7 +38,10 @@ function sameHost(origin: string, host: string): boolean {
 
 export function isOriginAllowed(origin: string | undefined, allowlist: string[] | null, host: string | undefined): boolean {
   if (!origin) return false;
-  if (allowlist) return allowlist.includes(origin);
-  if (!host) return false;
-  return sameHost(origin, host);
+  // The app must remain usable on Render's generated hostname and custom domains.
+  // An explicit list adds cross-origin deployments; it must not disable the app's
+  // own same-origin browser connection when the platform hostname differs from a
+  // stale/configured value.
+  if (host && sameHost(origin, host)) return true;
+  return allowlist?.includes(origin) ?? false;
 }

@@ -37,6 +37,10 @@ describe("isOriginAllowed", () => {
     expect(isOriginAllowed("https://evil.example", allowlist, "irrelevant")).toBe(false);
   });
 
+  it("always allows the app's own same-host origin even when an explicit list is configured", () => {
+    expect(isOriginAllowed("https://generated.onrender.com", ["https://other.example"], "generated.onrender.com")).toBe(true);
+  });
+
   it("without an allowlist, falls back to same-Host matching", () => {
     expect(isOriginAllowed("https://app.example", null, "app.example")).toBe(true);
     expect(isOriginAllowed("https://app.example:8443", null, "app.example:8443")).toBe(true);

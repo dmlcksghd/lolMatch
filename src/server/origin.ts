@@ -5,13 +5,10 @@
  * 안전한 기본값: ALLOWED_ORIGINS 미설정 시 "허용 목록 없음 = 전부 허용"이 아니라
  * 요청의 Origin이 서버 자신의 Host와 같을 때만 허용한다(동일 출처 배포가 기본 시나리오).
  *
- * Origin 헤더가 없는 요청은 허용하지 않는다(우회 방지). 실제 브라우저는 WebSocket
- * 핸드셰이크(RFC 6455)와 polling에 쓰는 XHR/fetch 요청 모두에 Origin을 반드시 싣는다 —
- * 즉 정상적인 브라우저 트래픽에서 Origin이 빠질 일이 없다. Origin이 빠진 요청은 이 서버가
- * 대상으로 삼지 않는 비브라우저 클라이언트(스크립트·봇 등)이거나 화이트리스트를 우회하려는
- * 시도이므로, 화이트리스트가 설정돼 있든 동일 출처 기본값이든 동일하게 거부한다.
- * (이전 구현은 Origin 부재 시 무조건 허용해, ALLOWED_ORIGINS를 두고도 Origin만 생략하면
- * 누구나 통과하는 우회 구멍이 있었다 — 리뷰로 발견되어 수정.)
+ * 브라우저의 동일 출처 polling GET은 Origin을 보내지 않을 수 있다. 이 정상 요청은
+ * Sec-Fetch-Site가 same-origin이고 Referer의 Host도 요청 Host와 일치할 때만 허용한다.
+ * 두 증거가 없거나 서로 모순되면 Origin 생략 우회로 보고 거부한다. WebSocket과
+ * 크로스오리진 polling은 Origin을 보내므로 아래의 기존 Origin 정책을 그대로 적용한다.
  *
  * 정말로 Origin을 보낼 수 없는 비브라우저 클라이언트를 허용해야 하는 "운영상 예외"가 생기면,
  * 그 클라이언트가 스스로 Origin 헤더를 보내게 하고(대부분의 HTTP/WS 클라이언트는 커스텀 헤더를
@@ -36,8 +33,25 @@ function sameHost(origin: string, host: string): boolean {
   }
 }
 
-export function isOriginAllowed(origin: string | undefined, allowlist: string[] | null, host: string | undefined): boolean {
-  if (!origin) return false;
+export interface OriginRequestMetadata {
+  referer?: string;
+  secFetchSite?: string;
+}
+
+export function isOriginAllowed(
+  origin: string | undefined,
+  allowlist: string[] | null,
+  host: string | undefined,
+  metadata: OriginRequestMetadata = {},
+): boolean {
+  if (!origin) {
+    return Boolean(
+      host &&
+        metadata.secFetchSite === "same-origin" &&
+        metadata.referer &&
+        sameHost(metadata.referer, host),
+    );
+  }
   // The app must remain usable on Render's generated hostname and custom domains.
   // An explicit list adds cross-origin deployments; it must not disable the app's
   // own same-origin browser connection when the platform hostname differs from a

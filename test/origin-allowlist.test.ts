@@ -51,6 +51,19 @@ describe("origin allowlisting (integration)", () => {
     return s;
   }
 
+  function connectLikeSameOriginBrowserPolling(): ClientSocket {
+    const s = ioClient(url, {
+      transports: ["polling"],
+      forceNew: true,
+      extraHeaders: {
+        Referer: `${url}/?room=test`,
+        "Sec-Fetch-Site": "same-origin",
+      },
+    });
+    sockets.push(s);
+    return s;
+  }
+
   function waitConnected(s: ClientSocket): Promise<void> {
     return new Promise((resolve, reject) => {
       s.once("connect", () => resolve());
@@ -107,6 +120,14 @@ describe("origin allowlisting (integration)", () => {
   });
 
   describe("Origin header omitted (bypass regression)", () => {
+    it("accepts a same-origin browser polling GET that legitimately omits Origin", async () => {
+      process.env.ALLOWED_ORIGINS = "https://allowed.example";
+      await start();
+      const s = connectLikeSameOriginBrowserPolling();
+      await waitConnected(s);
+      expect(s.connected).toBe(true);
+    });
+
     it("rejects a WebSocket handshake with no Origin header, even with an explicit allowlist", async () => {
       process.env.ALLOWED_ORIGINS = "https://allowed.example";
       await start();

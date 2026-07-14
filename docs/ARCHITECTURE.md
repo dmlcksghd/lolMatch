@@ -161,13 +161,10 @@ polling·WebSocket 두 전송 모두에서 Origin 헤더를 검사한다.
 - `ALLOWED_ORIGINS`(콤마 구분) 설정 시 그 목록만 허용.
 - 미설정 시 안전한 기본값: 요청의 Origin이 서버 자신의 Host와 같을 때만 허용(동일 출처 배포가
   기본 시나리오이므로 열린 크로스오리진을 기본값으로 두지 않는다).
-- **Origin 헤더가 없는 요청은 항상 거부한다(우회 방지)**. 실제 브라우저는 WebSocket
-  핸드셰이크(RFC 6455)와 polling에 쓰는 XHR/fetch 요청 모두에 Origin을 반드시 싣으므로,
-  정상적인 브라우저 트래픽에서는 Origin이 빠질 일이 없다. (첫 구현은 Origin 부재 시 무조건
-  허용했는데, 이는 `ALLOWED_ORIGINS`를 설정해도 Origin만 생략하면 누구나 통과하는 우회
-  구멍이었다 — 코드 리뷰로 발견되어 v0.5.1에서 수정.) 별도의 "비브라우저 예외" 옵션은 두지
-  않는다: 정말 필요해지면 그 클라이언트가 Origin 헤더를 직접 보내게 하고 화이트리스트에
-  추가하는 편이 서버가 Origin 부재를 통째로 허용하는 것보다 항상 더 안전하다(YAGNI).
+- WebSocket과 크로스오리진 polling은 Origin을 검사한다. 단, 브라우저의 **동일 출처 polling
+  GET은 Origin을 생략할 수 있으므로**, `Sec-Fetch-Site: same-origin`이면서 Referer의 Host가
+  요청 Host와 일치할 때만 정상 요청으로 허용한다. Origin과 이 두 가지 동일 출처 증거가 모두
+  없는 요청은 화이트리스트 우회로 보고 거부한다.
 
 ### Socket.IO 룸 스위칭
 
